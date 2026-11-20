@@ -1,0 +1,8 @@
+{
+  "name": "ConnectFlow",
+  "description": "All-in-one WhatsApp Business and Email campaign messaging dashboard with contact management, templates, and delivery tracking.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
