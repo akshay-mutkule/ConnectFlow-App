@@ -13,6 +13,7 @@ import { CampaignsPage } from './pages/CampaignsPage';
 import { TemplatesPage } from './pages/TemplatesPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { DashboardData } from './types';
+import { BrandLogo } from './components/BrandLogo';
 
 function AppRoutes() {
   const { firebaseUser, loading } = useAuth();
@@ -23,9 +24,7 @@ function AppRoutes() {
     return (
       <div className="min-h-screen bg-white flex items-center justify-center">
         <div className="flex flex-col items-center gap-3">
-          <div className="w-9 h-9 rounded-lg bg-blue-600 text-white flex items-center justify-center font-display font-bold text-sm">
-            CF
-          </div>
+          <BrandLogo size="lg" showWordmark={false} />
           <p className="text-sm text-slate-500">Loading ConnectFlow workspace...</p>
         </div>
       </div>

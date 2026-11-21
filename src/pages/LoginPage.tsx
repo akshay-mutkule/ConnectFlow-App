@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { ShieldCheck, Check, MessageSquare, Mail } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { BrandLogo } from '../components/BrandLogo';
 
 export const LoginPage: React.FC = () => {
   const { signIn, authError } = useAuth();
@@ -19,34 +20,8 @@ export const LoginPage: React.FC = () => {
     <div className="min-h-screen bg-white flex flex-col lg:flex-row">
       {/* Left Architectural Workspace Preview */}
       <div className="lg:w-[54%] bg-[#F8FAFC] border-b lg:border-b-0 lg:border-r border-slate-200 p-8 sm:p-12 lg:p-16 flex flex-col justify-between">
-        <div className="flex items-center gap-2.5">
-          <svg
-            width="30"
-            height="30"
-            viewBox="0 0 28 28"
-            fill="none"
-            xmlns="http://www.w3.org/2000/svg"
-            aria-hidden="true"
-          >
-            <rect width="28" height="28" rx="7" fill="#0F172A" />
-            <path
-              d="M7.5 14C7.5 10.9624 9.96243 8.5 13 8.5H19.5"
-              stroke="#38BDF8"
-              strokeWidth="2.2"
-              strokeLinecap="round"
-            />
-            <path
-              d="M20.5 14C20.5 17.0376 18.0376 19.5 15 19.5H8.5"
-              stroke="#34D399"
-              strokeWidth="2.2"
-              strokeLinecap="round"
-            />
-            <circle cx="19.5" cy="8.5" r="2" fill="#38BDF8" />
-            <circle cx="8.5" cy="19.5" r="2" fill="#34D399" />
-          </svg>
-          <span className="font-display font-bold text-xl tracking-tight text-slate-900">
-            ConnectFlow
-          </span>
+        <div>
+          <BrandLogo size="md" />
         </div>
 
         <div className="my-10 space-y-8 max-w-xl">
