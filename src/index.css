@@ -20,6 +20,36 @@
   .font-mono, .tabular-nums {
     font-variant-numeric: tabular-nums;
   }
+
+  *:focus-visible {
+    outline: 2px solid #2563eb;
+    outline-offset: 2px;
+  }
+}
+
+.cf-grid-canvas {
+  background-color: #f8fafc;
+  background-image:
+    linear-gradient(to right, rgba(15, 23, 42, 0.035) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(15, 23, 42, 0.035) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes cfFadeUp {
+    from {
+      opacity: 0;
+      transform: translateY(6px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .cf-page-enter {
+    animation: cfFadeUp 180ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
 }
 
 /* Official Google Sign-In Material Button */

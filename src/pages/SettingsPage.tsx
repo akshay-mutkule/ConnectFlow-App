@@ -196,7 +196,7 @@ export const SettingsPage: React.FC = () => {
             <div className="pt-5 border-t border-slate-200 space-y-3">
               <div className="flex items-center gap-2">
                 <Bell className="w-4 h-4 text-slate-500" />
-                <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                <h4 className="text-xs font-semibold text-slate-700">
                   Notification Preferences
                 </h4>
               </div>

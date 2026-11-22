@@ -250,7 +250,7 @@ export const CampaignsPage: React.FC = () => {
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="border-b border-slate-200 bg-[#F8FAFC] text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                <tr className="border-b border-slate-200 bg-[#F8FAFC] text-xs font-semibold text-slate-500">
                   <th className="py-3 px-6">Campaign Name</th>
                   <th className="py-3 px-4">Type</th>
                   <th className="py-3 px-4 text-right">Recipients</th>

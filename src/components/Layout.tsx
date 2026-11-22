@@ -171,11 +171,11 @@ export const Layout: React.FC<LayoutProps> = ({ children, onOpen3D }) => {
                   className={({ isActive }) => {
                     const activeStyles =
                       item.accent === 'whatsapp'
-                        ? 'bg-emerald-50 text-emerald-800 font-semibold'
+                        ? 'bg-emerald-50 text-emerald-800 font-semibold ring-1 ring-emerald-200/70'
                         : item.accent === 'email'
-                          ? 'bg-blue-50 text-blue-700 font-semibold'
-                          : 'bg-slate-900 text-white font-semibold';
-                    return `flex items-center gap-3 px-3 py-2 rounded-lg text-[13.5px] transition-colors whitespace-nowrap ${
+                          ? 'bg-blue-50 text-blue-700 font-semibold ring-1 ring-blue-200/70'
+                          : 'bg-slate-900 text-white font-semibold shadow-xs';
+                    return `flex items-center gap-3 px-3 py-2 rounded-lg text-[13.5px] transition-all duration-150 whitespace-nowrap ${
                       isActive
                         ? activeStyles
                         : 'text-slate-600 hover:bg-slate-100/80 hover:text-slate-900 font-medium'
@@ -206,8 +206,12 @@ export const Layout: React.FC<LayoutProps> = ({ children, onOpen3D }) => {
       </nav>
 
       {/* Bottom User Profile & Sign Out */}
-      <div className="p-3 border-t border-slate-200 shrink-0 space-y-1.5 bg-[#F8FAFC]/60">
-        <div className="flex items-center gap-3 px-2.5 py-2">
+      <div className="p-3 border-t border-slate-200 shrink-0 space-y-1 bg-[#F8FAFC]/70">
+        <NavLink
+          to="/settings"
+          onClick={() => setMobileOpen(false)}
+          className="flex items-center gap-3 px-2.5 py-2 rounded-lg hover:bg-white hover:ring-1 hover:ring-slate-200/80 transition-all"
+        >
           <div className="w-8 h-8 rounded-lg bg-slate-900 text-white flex items-center justify-center text-xs font-semibold shrink-0 font-display">
             {initials || 'CF'}
           </div>
@@ -215,7 +219,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, onOpen3D }) => {
             <p className="text-xs font-semibold text-slate-900 truncate">{displayName}</p>
             <p className="text-[11px] text-slate-500 truncate">{displayEmail}</p>
           </div>
-        </div>
+        </NavLink>
         <button
           type="button"
           onClick={logout}
@@ -291,7 +295,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, onOpen3D }) => {
           </div>
         </header>
 
-        <main className="flex-1 p-4 sm:p-8 max-w-7xl w-full mx-auto">
+        <main key={location.pathname} className="flex-1 p-4 sm:p-8 max-w-7xl w-full mx-auto cf-page-enter">
           {children}
         </main>
       </div>
