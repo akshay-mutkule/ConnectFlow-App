@@ -9,6 +9,7 @@ import {
   Save,
   Copy,
   Check,
+  Activity,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { apiRequest } from '../lib/api';
@@ -32,6 +33,11 @@ export const SettingsPage: React.FC = () => {
   const [waModalOpen, setWaModalOpen] = useState(false);
   const [emailModalOpen, setEmailModalOpen] = useState(false);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
+  const [testingChannel, setTestingChannel] = useState<'whatsapp' | 'email' | null>(null);
+  const [testResults, setTestResults] = useState<{
+    whatsapp?: { ok: boolean; mode: string; message: string };
+    email?: { ok: boolean; mode: string; message: string };
+  }>({});
 
   useEffect(() => {
     if (profile) {
@@ -93,6 +99,34 @@ export const SettingsPage: React.FC = () => {
     });
     await refreshProfile();
     showToast('Email provider disconnected', undefined, 'info');
+  };
+
+  const handleTestConnection = async (channel: 'whatsapp' | 'email') => {
+    setTestingChannel(channel);
+    try {
+      const res = await apiRequest<{ ok: boolean; mode: string; message: string }>(
+        '/api/integrations/test-connection',
+        {
+          method: 'POST',
+          body: JSON.stringify({ channel }),
+        }
+      );
+      setTestResults((prev) => ({ ...prev, [channel]: res }));
+      showToast(
+        `${channel === 'whatsapp' ? 'WhatsApp' : 'Email'} connection verified`,
+        res.message,
+        'success'
+      );
+    } catch (err: any) {
+      const msg = err.message || 'Verification failed';
+      setTestResults((prev) => ({
+        ...prev,
+        [channel]: { ok: false, mode: 'live', message: msg },
+      }));
+      showToast('Connection check failed', msg, 'error');
+    } finally {
+      setTestingChannel(null);
+    }
   };
 
   const copyWebhook = async () => {
@@ -287,13 +321,34 @@ export const SettingsPage: React.FC = () => {
               </button>
             </div>
 
-            <div className="flex items-center gap-2 pt-2 border-t border-slate-100">
+            {testResults.whatsapp && (
+              <p
+                className={`text-xs px-3 py-2 rounded-lg border ${
+                  testResults.whatsapp.ok
+                    ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                    : 'bg-red-50 border-red-200 text-red-700'
+                }`}
+              >
+                {testResults.whatsapp.message}
+              </p>
+            )}
+
+            <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-100">
               <button
                 type="button"
                 onClick={() => setWaModalOpen(true)}
                 className="px-3.5 py-2 text-xs font-semibold text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 transition-colors"
               >
                 Configure WhatsApp
+              </button>
+              <button
+                type="button"
+                disabled={testingChannel === 'whatsapp'}
+                onClick={() => handleTestConnection('whatsapp')}
+                className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-50 transition-colors"
+              >
+                <Activity className="w-3.5 h-3.5 text-emerald-600" />
+                <span>{testingChannel === 'whatsapp' ? 'Testing...' : 'Test Connection'}</span>
               </button>
               {integrations?.whatsappConnected && (
                 <button
@@ -337,7 +392,19 @@ export const SettingsPage: React.FC = () => {
               Configure your sender email address via Gmail SMTP App Password, custom SMTP relay, or Resend API key.
             </p>
 
-            <div className="flex items-center gap-2 pt-2 border-t border-slate-100">
+            {testResults.email && (
+              <p
+                className={`text-xs px-3 py-2 rounded-lg border ${
+                  testResults.email.ok
+                    ? 'bg-blue-50 border-blue-200 text-blue-800'
+                    : 'bg-red-50 border-red-200 text-red-700'
+                }`}
+              >
+                {testResults.email.message}
+              </p>
+            )}
+
+            <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-100">
               <button
                 type="button"
                 onClick={() => setEmailModalOpen(true)}
@@ -346,13 +413,24 @@ export const SettingsPage: React.FC = () => {
                 Configure Email
               </button>
               {integrations?.emailConnected && (
-                <button
-                  type="button"
-                  onClick={handleDisconnectEmail}
-                  className="px-3.5 py-2 text-xs font-medium text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors"
-                >
-                  Disconnect
-                </button>
+                <>
+                  <button
+                    type="button"
+                    disabled={testingChannel === 'email'}
+                    onClick={() => handleTestConnection('email')}
+                    className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-50 transition-colors"
+                  >
+                    <Activity className="w-3.5 h-3.5 text-blue-600" />
+                    <span>{testingChannel === 'email' ? 'Testing...' : 'Test Connection'}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleDisconnectEmail}
+                    className="px-3.5 py-2 text-xs font-medium text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors"
+                  >
+                    Disconnect
+                  </button>
+                </>
               )}
             </div>
           </div>

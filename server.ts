@@ -2,7 +2,8 @@ import 'dotenv/config';
 import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { eq, desc, and, inArray, sql } from 'drizzle-orm';
+import nodemailer from 'nodemailer';
+import { eq, desc, and, inArray } from 'drizzle-orm';
 import { db } from './src/db/index.ts';
 import {
   users,
@@ -483,21 +484,128 @@ app.get('/api/dashboard', requireAuth, async (req: AuthRequest, res) => {
       0
     );
 
+    const waCampaigns = userCampaigns.filter((c) => c.channel === 'whatsapp');
+    const emailCampaigns = userCampaigns.filter((c) => c.channel === 'email');
+
+    const whatsappDelivered = waCampaigns.reduce(
+      (acc, c) => acc + Math.max(c.deliveredCount, c.sentCount - c.failedCount - c.bouncedCount),
+      0
+    );
+    const emailDelivered = emailCampaigns.reduce(
+      (acc, c) => acc + Math.max(c.deliveredCount, c.sentCount - c.failedCount - c.bouncedCount),
+      0
+    );
+
     res.json({
       stats: {
         totalContacts: userContacts.length,
         whatsappOptedIn: userContacts.filter((c) => c.whatsappOptIn && !c.whatsappOptOutAt).length,
-        emailOptedIn: userContacts.filter((c) => c.emailOptIn && !c.suppressedEmail).length,
+        emailOptedIn: userContacts.filter((c) => c.emailOptIn && !c.suppressedEmail && !c.emailUnsubscribedAt).length,
         whatsappSent,
         emailsSent,
         successfulDeliveries,
         failedMessages,
       },
-      recentCampaigns: userCampaigns.slice(0, 6),
+      channelBreakdown: {
+        whatsappDelivered,
+        emailDelivered,
+        scheduledCount: userCampaigns.filter((c) => c.status === 'scheduled' || c.status === 'paused').length,
+        suppressedCount: userContacts.filter((c) => c.suppressedEmail || Boolean(c.emailUnsubscribedAt)).length,
+        whatsappOptOutCount: userContacts.filter((c) => Boolean(c.whatsappOptOutAt)).length,
+      },
+      recentCampaigns: userCampaigns.slice(0, 8),
       recentActivity: recentLogs,
     });
   } catch (error: any) {
     res.status(500).json({ error: error.message || 'Failed to load dashboard' });
+  }
+});
+
+// Test Channel Connection (Live API / SMTP verification)
+app.post('/api/integrations/test-connection', requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const dbUser = await resolveDbUser(req);
+    const channel = req.body.channel === 'email' ? 'email' : 'whatsapp';
+    const [integration] = await db
+      .select()
+      .from(integrations)
+      .where(eq(integrations.userId, dbUser.id))
+      .limit(1);
+
+    if (channel === 'whatsapp') {
+      if (!integration?.whatsappConnected || integration.whatsappMode !== 'live') {
+        return res.json({
+          ok: true,
+          mode: 'demo',
+          details: 'Demo Mode active — WhatsApp dispatches are safely simulated.',
+        });
+      }
+      if (!integration.whatsappPhoneNumberId || !integration.whatsappAccessToken) {
+        return res.status(400).json({ error: 'Missing WhatsApp Phone Number ID or Access Token.' });
+      }
+      const resp = await fetch(
+        `https://graph.facebook.com/v21.0/${integration.whatsappPhoneNumberId}?fields=display_phone_number,verified_name`,
+        { headers: { Authorization: `Bearer ${integration.whatsappAccessToken}` } }
+      );
+      const data: any = await resp.json();
+      if (!resp.ok) {
+        return res.status(400).json({
+          error: data?.error?.message || `Meta Graph API returned HTTP ${resp.status}`,
+        });
+      }
+      return res.json({
+        ok: true,
+        mode: 'live',
+        details: `Verified Meta number: ${data.display_phone_number || integration.whatsappPhoneNumberId}${data.verified_name ? ` (${data.verified_name})` : ''}`,
+      });
+    }
+
+    // Email verification
+    if (!integration?.emailConnected) {
+      return res.status(400).json({ error: 'Email sender not configured yet.' });
+    }
+    if (integration.emailMode !== 'live') {
+      return res.json({
+        ok: true,
+        mode: 'demo',
+        details: `Demo Mode active for sender ${integration.emailFromAddress}.`,
+      });
+    }
+    if (integration.emailProvider === 'resend') {
+      if (!integration.emailApiKey) {
+        return res.status(400).json({ error: 'Missing Resend API key.' });
+      }
+      const resp = await fetch('https://api.resend.com/domains', {
+        headers: { Authorization: `Bearer ${integration.emailApiKey}` },
+      });
+      if (!resp.ok) {
+        return res.status(400).json({ error: `Resend API verification failed (${resp.status})` });
+      }
+      return res.json({
+        ok: true,
+        mode: 'live',
+        details: `Resend API key verified for ${integration.emailFromAddress}.`,
+      });
+    }
+
+    const port = integration.smtpPort || 465;
+    const transporter = nodemailer.createTransport({
+      host: integration.smtpHost || 'smtp.gmail.com',
+      port,
+      secure: port === 465,
+      auth: {
+        user: integration.smtpUser || integration.emailFromAddress || '',
+        pass: integration.smtpPass || '',
+      },
+    });
+    await transporter.verify();
+    return res.json({
+      ok: true,
+      mode: 'live',
+      details: `SMTP handshake verified on ${integration.smtpHost || 'smtp.gmail.com'}:${port}.`,
+    });
+  } catch (error: any) {
+    res.status(400).json({ error: error.message || 'Connection test failed' });
   }
 });
 
@@ -1328,6 +1436,76 @@ app.post('/api/campaigns/:id/status', requireAuth, async (req: AuthRequest, res)
     res.json({ campaign: updated[0] });
   } catch (error: any) {
     res.status(500).json({ error: error.message || 'Failed to update campaign status' });
+  }
+});
+
+// Retry only failed / bounced recipients on an existing campaign
+app.post('/api/campaigns/:id/retry-failed', requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const dbUser = await resolveDbUser(req);
+    const id = Number(req.params.id);
+    const [campaign] = await db
+      .select()
+      .from(campaigns)
+      .where(and(eq(campaigns.id, id), eq(campaigns.userId, dbUser.id)))
+      .limit(1);
+
+    if (!campaign) {
+      return res.status(404).json({ error: 'Campaign not found' });
+    }
+
+    const retryRows = await db
+      .select()
+      .from(campaignRecipients)
+      .where(
+        and(
+          eq(campaignRecipients.campaignId, id),
+          inArray(campaignRecipients.status, ['failed', 'bounced'])
+        )
+      );
+
+    if (!retryRows.length) {
+      return res.status(400).json({ error: 'No failed or bounced recipients to retry.' });
+    }
+
+    await db
+      .update(campaignRecipients)
+      .set({ status: 'queued', errorMessage: null, updatedAt: new Date() })
+      .where(
+        and(
+          eq(campaignRecipients.campaignId, id),
+          inArray(campaignRecipients.status, ['failed', 'bounced'])
+        )
+      );
+
+    await db
+      .update(campaigns)
+      .set({ status: 'sending' })
+      .where(eq(campaigns.id, id));
+
+    await executeCampaignById(id, getAppBaseUrl(req));
+
+    const [updatedCampaign] = await db
+      .select()
+      .from(campaigns)
+      .where(eq(campaigns.id, id))
+      .limit(1);
+
+    const updatedRecipients = await db
+      .select()
+      .from(campaignRecipients)
+      .where(eq(campaignRecipients.campaignId, id));
+
+    await db.insert(auditLogs).values({
+      userId: dbUser.id,
+      action: 'campaign_retried',
+      channel: campaign.channel,
+      details: `Retried ${retryRows.length} failed/bounced recipient(s) on "${campaign.name}".`,
+    });
+
+    res.json({ campaign: updatedCampaign, recipients: updatedRecipients });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Retry failed' });
   }
 });
 

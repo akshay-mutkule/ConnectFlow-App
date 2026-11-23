@@ -125,6 +125,13 @@ export interface DashboardData {
     successfulDeliveries: number;
     failedMessages: number;
   };
+  channelBreakdown?: {
+    whatsappDelivered: number;
+    emailDelivered: number;
+    scheduledCount: number;
+    suppressedCount: number;
+    whatsappOptOutCount: number;
+  };
   recentCampaigns: Campaign[];
   recentActivity: AuditLog[];
 }

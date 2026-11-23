@@ -11,6 +11,8 @@ import {
   X,
   Send,
   Search,
+  RotateCcw,
+  Download,
 } from 'lucide-react';
 import { apiRequest } from '../lib/api';
 import { Campaign, CampaignRecipient } from '../types';
@@ -30,6 +32,7 @@ export const CampaignsPage: React.FC = () => {
   const [detailRecipients, setDetailRecipients] = useState<CampaignRecipient[]>([]);
   const [detailLoading, setDetailLoading] = useState(false);
   const [recipientFilter, setRecipientFilter] = useState<'all' | 'delivered' | 'issues'>('all');
+  const [retrying, setRetrying] = useState(false);
 
   const loadCampaigns = async () => {
     setLoading(true);
@@ -118,6 +121,55 @@ export const CampaignsPage: React.FC = () => {
     } catch (err: any) {
       showToast('Update failed', err.message, 'error');
     }
+  };
+
+  const handleRetryFailed = async () => {
+    if (!detailCampaign) return;
+    setRetrying(true);
+    try {
+      const res = await apiRequest<{ campaign: Campaign; recipients: CampaignRecipient[] }>(
+        `/api/campaigns/${detailCampaign.id}/retry-failed`,
+        { method: 'POST' }
+      );
+      setDetailCampaign(res.campaign);
+      setDetailRecipients(res.recipients);
+      setCampaigns((prev) =>
+        prev.map((item) => (item.id === res.campaign.id ? res.campaign : item))
+      );
+      showToast(
+        'Retry completed',
+        `${res.campaign.deliveredCount}/${res.campaign.totalRecipients} delivered`,
+        'success'
+      );
+    } catch (err: any) {
+      showToast('Retry failed', err.message, 'error');
+    } finally {
+      setRetrying(false);
+    }
+  };
+
+  const handleExportReportCsv = () => {
+    if (!detailCampaign || !detailRecipients.length) return;
+    const esc = (v: string) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+    const header = ['recipient', 'destination', 'status', 'provider_message_id', 'error', 'updated_at'].join(',');
+    const rows = detailRecipients.map((r) =>
+      [
+        esc(r.contactName),
+        esc(r.destination),
+        esc(r.status),
+        esc(r.providerMessageId || ''),
+        esc(r.errorMessage || ''),
+        esc(r.updatedAt),
+      ].join(',')
+    );
+    const blob = new Blob([[header, ...rows].join('\n')], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `campaign_${detailCampaign.id}_report.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast('Delivery report exported', `${detailRecipients.length} row(s) downloaded.`, 'success');
   };
 
   const filteredDetailRecipients = useMemo(() => {
@@ -409,7 +461,7 @@ export const CampaignsPage: React.FC = () => {
       {detailOpen && detailCampaign && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4">
           <div className="bg-white border border-slate-200 rounded-xl w-full max-w-2xl max-h-[90vh] flex flex-col shadow-xl overflow-hidden">
-            <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
+            <div className="px-6 py-4 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h3 className="font-display text-base font-semibold text-slate-900">
                   {detailCampaign.name} — Delivery Report
@@ -420,13 +472,36 @@ export const CampaignsPage: React.FC = () => {
                   {detailCampaign.totalRecipients} recipients
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={() => setDetailOpen(false)}
-                className="p-1 text-slate-400 hover:text-slate-700"
-              >
-                <X className="w-4 h-4" />
-              </button>
+              <div className="flex items-center gap-2">
+                {detailCampaign.failedCount + detailCampaign.bouncedCount > 0 && (
+                  <button
+                    type="button"
+                    disabled={retrying}
+                    onClick={handleRetryFailed}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-amber-800 bg-amber-50 border border-amber-200 rounded-lg hover:bg-amber-100 disabled:opacity-50 transition-colors"
+                  >
+                    <RotateCcw className={`w-3.5 h-3.5 ${retrying ? 'animate-spin' : ''}`} />
+                    <span>{retrying ? 'Retrying...' : 'Retry Failed'}</span>
+                  </button>
+                )}
+                {detailRecipients.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={handleExportReportCsv}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span>Export CSV</span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setDetailOpen(false)}
+                  className="p-1.5 text-slate-400 hover:text-slate-700"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
             </div>
 
             <div className="p-6 overflow-y-auto space-y-5">

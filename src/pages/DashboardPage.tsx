@@ -22,6 +22,7 @@ export const DashboardPage: React.FC<{
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
+  const [chartChannel, setChartChannel] = useState<'all' | 'whatsapp' | 'email'>('all');
 
   useEffect(() => {
     let active = true;
@@ -67,10 +68,22 @@ export const DashboardPage: React.FC<{
   const deliveryRate =
     totalSent > 0 ? Math.round((data.stats.successfulDeliveries / totalSent) * 100) : 0;
 
+  const waDelivered = data.channelBreakdown?.whatsappDelivered ?? 0;
+  const emailDelivered = data.channelBreakdown?.emailDelivered ?? 0;
+  const waRate =
+    data.stats.whatsappSent > 0 ? Math.round((waDelivered / data.stats.whatsappSent) * 100) : 0;
+  const emailRate =
+    data.stats.emailsSent > 0 ? Math.round((emailDelivered / data.stats.emailsSent) * 100) : 0;
+  const scheduledCount = data.channelBreakdown?.scheduledCount ?? 0;
+  const suppressedCount = data.channelBreakdown?.suppressedCount ?? 0;
+  const whatsappOptOutCount = data.channelBreakdown?.whatsappOptOutCount ?? 0;
+
   const waLive = integrations?.whatsappConnected && integrations.whatsappMode === 'live';
   const emailLive = integrations?.emailConnected && integrations.emailMode === 'live';
 
-  const chartCampaigns = [...data.recentCampaigns].reverse();
+  const chartCampaigns = [...data.recentCampaigns]
+    .filter((c) => chartChannel === 'all' || c.channel === chartChannel)
+    .reverse();
   const maxTotal = Math.max(1, ...chartCampaigns.map((c) => Math.max(c.totalRecipients, c.sentCount)));
   const midTick = Math.round(maxTotal / 2);
 
@@ -141,8 +154,9 @@ export const DashboardPage: React.FC<{
           <p className="font-display text-2xl font-bold text-emerald-700 mt-2 tabular-nums">
             {data.stats.whatsappSent.toLocaleString()}
           </p>
-          <p className="text-[11px] text-slate-500 mt-2">
+          <p className="text-[11px] text-slate-500 mt-2 font-mono tabular-nums">
             {waLive ? 'Meta Cloud API' : 'Demo Mode'}
+            {data.stats.whatsappSent > 0 ? ` · ${waRate}% deliv` : ''}
           </p>
         </Link>
 
@@ -157,8 +171,9 @@ export const DashboardPage: React.FC<{
           <p className="font-display text-2xl font-bold text-blue-600 mt-2 tabular-nums">
             {data.stats.emailsSent.toLocaleString()}
           </p>
-          <p className="text-[11px] text-slate-500 mt-2">
+          <p className="text-[11px] text-slate-500 mt-2 font-mono tabular-nums">
             {emailLive ? 'Live Relay' : integrations?.emailConnected ? 'Demo Mode' : 'Prompt on send'}
+            {data.stats.emailsSent > 0 ? ` · ${emailRate}% deliv` : ''}
           </p>
         </Link>
 
@@ -199,7 +214,9 @@ export const DashboardPage: React.FC<{
           <p className="font-display text-2xl font-bold text-red-600 mt-2 tabular-nums">
             {data.stats.failedMessages.toLocaleString()}
           </p>
-          <p className="text-[11px] text-slate-500 mt-2">Failed or bounced</p>
+          <p className="text-[11px] text-slate-500 mt-2 font-mono tabular-nums">
+            {scheduledCount > 0 ? `${scheduledCount} scheduled queued` : 'Failed or bounced'}
+          </p>
         </Link>
       </div>
 
@@ -215,27 +232,52 @@ export const DashboardPage: React.FC<{
                 Delivered vs. failed volume across your latest campaigns
               </p>
             </div>
-            <div className="flex items-center gap-4 text-[11px] font-medium text-slate-600">
-              <span className="inline-flex items-center gap-1.5">
-                <span className="w-2.5 h-2.5 rounded-sm bg-emerald-600" />
-                WhatsApp
-              </span>
-              <span className="inline-flex items-center gap-1.5">
-                <span className="w-2.5 h-2.5 rounded-sm bg-blue-600" />
-                Email
-              </span>
-              <span className="inline-flex items-center gap-1.5">
-                <span className="w-2.5 h-2.5 rounded-sm bg-red-500" />
-                Failed
-              </span>
+            <div className="flex flex-wrap items-center gap-4">
+              <div className="inline-flex p-0.5 bg-slate-100 rounded-lg text-[11px] font-medium">
+                {(['all', 'whatsapp', 'email'] as const).map((ch) => (
+                  <button
+                    key={ch}
+                    type="button"
+                    onClick={() => {
+                      setChartChannel(ch);
+                      setHoveredIdx(null);
+                    }}
+                    className={`px-2.5 py-1 rounded-md transition-colors ${
+                      chartChannel === ch
+                        ? 'bg-white text-slate-900 shadow-xs'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    {ch === 'all' ? 'All' : ch === 'whatsapp' ? 'WhatsApp' : 'Email'}
+                  </button>
+                ))}
+              </div>
+              <div className="flex items-center gap-3 text-[11px] font-medium text-slate-600">
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="w-2.5 h-2.5 rounded-sm bg-emerald-600" />
+                  WhatsApp
+                </span>
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="w-2.5 h-2.5 rounded-sm bg-blue-600" />
+                  Email
+                </span>
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="w-2.5 h-2.5 rounded-sm bg-red-500" />
+                  Failed
+                </span>
+              </div>
             </div>
           </div>
 
           {chartCampaigns.length === 0 ? (
             <div className="h-48 border border-dashed border-slate-200 rounded-lg bg-[#F8FAFC]/60 flex flex-col items-center justify-center text-center p-6">
-              <p className="text-xs font-semibold text-slate-700">No campaign telemetry yet</p>
+              <p className="text-xs font-semibold text-slate-700">
+                {chartChannel === 'all'
+                  ? 'No campaign telemetry yet'
+                  : `No ${chartChannel === 'whatsapp' ? 'WhatsApp' : 'Email'} campaigns recorded yet`}
+              </p>
               <p className="text-[11px] text-slate-500 mt-1 max-w-xs">
-                Launch your first WhatsApp or Email campaign to visualize delivery performance here.
+                Launch a campaign to visualize per-run delivery performance here.
               </p>
             </div>
           ) : (
@@ -346,8 +388,9 @@ export const DashboardPage: React.FC<{
                 {waLive ? 'Live API' : 'Demo Mode'}
               </span>
             </div>
-            <p className="text-xs text-slate-500 leading-relaxed">
-              {data.stats.whatsappOptedIn} opted-in contact(s) ready for broadcast or approved templates.
+            <p className="text-xs text-slate-500 leading-relaxed font-mono tabular-nums">
+              {data.stats.whatsappOptedIn} opted-in · {whatsappOptOutCount} opted-out
+              {data.stats.whatsappSent > 0 ? ` · ${waRate}% deliv rate` : ''}
             </p>
             <Link
               to="/whatsapp"
@@ -370,11 +413,15 @@ export const DashboardPage: React.FC<{
                 {emailLive ? 'Live Relay' : integrations?.emailConnected ? 'Demo Mode' : 'Setup on send'}
               </span>
             </div>
-            <p className="text-xs text-slate-500 leading-relaxed">
-              {integrations?.emailFromAddress
-                ? `Active sender: ${integrations.emailFromAddress} · ${data.stats.emailOptedIn} opted-in`
-                : `${data.stats.emailOptedIn} opted-in contact(s) · Sender email prompted on compose`}
+            <p className="text-xs text-slate-500 leading-relaxed font-mono tabular-nums">
+              {data.stats.emailOptedIn} opted-in · {suppressedCount} suppressed
+              {data.stats.emailsSent > 0 ? ` · ${emailRate}% deliv rate` : ''}
             </p>
+            {integrations?.emailFromAddress && (
+              <p className="text-[11px] text-slate-500 truncate">
+                Sender: {integrations.emailFromAddress}
+              </p>
+            )}
             <Link
               to="/email"
               className="inline-flex items-center gap-1 text-xs font-semibold text-blue-600 hover:text-blue-700 pt-1"

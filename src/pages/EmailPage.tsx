@@ -16,6 +16,8 @@ import {
   Search,
   Monitor,
   Smartphone,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import { apiRequest } from '../lib/api';
 import { Campaign, Contact, ContactGroup, Template } from '../types';
@@ -58,6 +60,7 @@ export const EmailPage: React.FC = () => {
   const [savingDraft, setSavingDraft] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [sending, setSending] = useState(false);
+  const [previewIndex, setPreviewIndex] = useState(0);
 
   const bodyRef = useRef<HTMLTextAreaElement | null>(null);
   const visualRef = useRef<HTMLDivElement | null>(null);
@@ -120,6 +123,12 @@ export const EmailPage: React.FC = () => {
     [contacts]
   );
 
+  const allEligibleTags = useMemo(() => {
+    const set = new Set<string>();
+    eligibleContacts.forEach((c) => c.tags.forEach((t) => set.add(t)));
+    return Array.from(set).sort();
+  }, [eligibleContacts]);
+
   const visibleEligibleContacts = useMemo(() => {
     const q = recipientSearch.trim().toLowerCase();
     if (!q) return eligibleContacts;
@@ -140,7 +149,10 @@ export const EmailPage: React.FC = () => {
     return eligibleContacts.filter((c) => ids.has(c.id));
   }, [eligibleContacts, selectedContactIds, selectedGroupIds]);
 
-  const sampleContact = recipientSet[0] ||
+  const activePreviewIdx =
+    recipientSet.length > 0 ? Math.min(previewIndex, recipientSet.length - 1) : 0;
+
+  const sampleContact = recipientSet[activePreviewIdx] ||
     eligibleContacts[0] || { name: 'Alex Rivera', email: 'alex@company.com' };
 
   const previewSubject = useMemo(
@@ -158,6 +170,19 @@ export const EmailPage: React.FC = () => {
         .replace(/\{\{\s*email\s*\}\}/gi, sampleContact.email || 'alex@company.com'),
     [body, sampleContact]
   );
+
+  const toggleTagSelection = (tag: string) => {
+    const matchingIds = eligibleContacts
+      .filter((c) => c.tags.includes(tag))
+      .map((c) => c.id);
+    if (!matchingIds.length) return;
+    const allSelected = matchingIds.every((id) => selectedContactIds.includes(id));
+    setSelectedContactIds((prev) =>
+      allSelected
+        ? prev.filter((id) => !matchingIds.includes(id))
+        : Array.from(new Set([...prev, ...matchingIds]))
+    );
+  };
 
   const applyFormat = (cmd: 'bold' | 'italic' | 'insertUnorderedList' | 'createLink') => {
     if (editorMode === 'visual' && visualRef.current) {
@@ -394,7 +419,7 @@ export const EmailPage: React.FC = () => {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-medium text-slate-700 mb-1.5">
-                  1. Campaign Name *
+                  Campaign Name *
                 </label>
                 <input
                   type="text"
@@ -408,7 +433,7 @@ export const EmailPage: React.FC = () => {
 
               <div>
                 <label className="block text-xs font-medium text-slate-700 mb-1.5">
-                  2. From Email *
+                  From Email *
                 </label>
                 <div className="flex gap-2">
                   <input
@@ -436,7 +461,7 @@ export const EmailPage: React.FC = () => {
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div className="sm:col-span-2">
                 <label className="block text-xs font-medium text-slate-700 mb-1.5">
-                  4. Subject *
+                  Subject *
                 </label>
                 <input
                   type="text"
@@ -466,11 +491,11 @@ export const EmailPage: React.FC = () => {
               </div>
             </div>
 
-            {/* 5. Visual / HTML Rich-Text Body */}
+            {/* Visual / HTML Rich-Text Body */}
             <div>
               <div className="flex flex-wrap items-center justify-between gap-2 mb-1.5">
                 <div className="flex items-center gap-2">
-                  <label className="text-xs font-medium text-slate-700">5. Email Body *</label>
+                  <label className="text-xs font-medium text-slate-700">Email Body *</label>
                   <div className="inline-flex p-0.5 bg-slate-100 rounded-md">
                     <button
                       type="button"
@@ -580,12 +605,12 @@ export const EmailPage: React.FC = () => {
               </p>
             </div>
 
-            {/* 3. Recipients */}
+            {/* Opted-In Recipients */}
             <div className="pt-4 border-t border-slate-200 space-y-4">
               <div className="flex items-center justify-between">
                 <div>
                   <h3 className="text-sm font-semibold text-slate-900">
-                    3. Recipients (Email Opted-In)
+                    Opted-In Recipients
                   </h3>
                   <p className="text-xs text-slate-500">
                     {eligibleContacts.length} of {contacts.length} contacts are opted-in and not suppressed.
@@ -596,32 +621,63 @@ export const EmailPage: React.FC = () => {
                 </span>
               </div>
 
-              <div className="flex flex-wrap gap-2">
-                {groups.map((g) => {
-                  const active = selectedGroupIds.includes(g.id);
-                  const eligibleInGroup = eligibleContacts.filter((c) =>
-                    c.groupIds.includes(g.id)
-                  ).length;
-                  return (
-                    <button
-                      key={g.id}
-                      type="button"
-                      onClick={() =>
-                        setSelectedGroupIds((prev) =>
-                          active ? prev.filter((id) => id !== g.id) : [...prev, g.id]
-                        )
-                      }
-                      className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors ${
-                        active
-                          ? 'bg-blue-50 border-blue-300 text-blue-700'
-                          : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
-                      }`}
-                    >
-                      {g.name} ({eligibleInGroup})
-                    </button>
-                  );
-                })}
+              <div>
+                <p className="text-xs font-medium text-slate-600 mb-2">Contact Groups</p>
+                <div className="flex flex-wrap gap-2">
+                  {groups.map((g) => {
+                    const active = selectedGroupIds.includes(g.id);
+                    const eligibleInGroup = eligibleContacts.filter((c) =>
+                      c.groupIds.includes(g.id)
+                    ).length;
+                    return (
+                      <button
+                        key={g.id}
+                        type="button"
+                        onClick={() =>
+                          setSelectedGroupIds((prev) =>
+                            active ? prev.filter((id) => id !== g.id) : [...prev, g.id]
+                          )
+                        }
+                        className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors ${
+                          active
+                            ? 'bg-blue-50 border-blue-300 text-blue-700'
+                            : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                        }`}
+                      >
+                        {g.name} ({eligibleInGroup})
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
+
+              {allEligibleTags.length > 0 && (
+                <div>
+                  <p className="text-xs font-medium text-slate-600 mb-2">Quick-Target by Tag</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {allEligibleTags.map((tag) => {
+                      const matching = eligibleContacts.filter((c) => c.tags.includes(tag));
+                      const active =
+                        matching.length > 0 &&
+                        matching.every((c) => selectedContactIds.includes(c.id));
+                      return (
+                        <button
+                          key={tag}
+                          type="button"
+                          onClick={() => toggleTagSelection(tag)}
+                          className={`px-2.5 py-1 text-[11px] font-medium rounded-md border transition-colors ${
+                            active
+                              ? 'bg-blue-50 border-blue-300 text-blue-700'
+                              : 'bg-[#F8FAFC] border-slate-200 text-slate-600 hover:bg-slate-100'
+                          }`}
+                        >
+                          #{tag} ({matching.length})
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
               <div className="flex items-center justify-between gap-3">
                 <div className="relative flex-1">
@@ -689,7 +745,7 @@ export const EmailPage: React.FC = () => {
               </div>
             </div>
 
-            {/* 8. Schedule Email & 9. Send Email */}
+            {/* Schedule & Send Email */}
             <div className="pt-4 border-t border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div className="flex flex-wrap items-center gap-3">
                 <label className="inline-flex items-center gap-2 text-xs font-medium text-slate-700 cursor-pointer">
@@ -700,7 +756,7 @@ export const EmailPage: React.FC = () => {
                     className="rounded border-slate-300 text-blue-600"
                   />
                   <Calendar className="w-3.5 h-3.5 text-slate-500" />
-                  <span>8. Schedule Email</span>
+                  <span>Schedule Email</span>
                 </label>
                 {scheduleEnabled && (
                   <input
@@ -717,40 +773,73 @@ export const EmailPage: React.FC = () => {
                 className="inline-flex items-center justify-center gap-2 px-5 py-2.5 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors whitespace-nowrap"
               >
                 <Send className="w-3.5 h-3.5" />
-                <span>9. Send Email ({recipientSet.length})</span>
+                <span>Send Email ({recipientSet.length})</span>
               </button>
             </div>
           </div>
         </div>
 
-        {/* Right: 6. Inbox Client Preview & 7. Send Test Email */}
+        {/* Right: Inbox Client Preview & Send Test Email */}
         <div className="lg:col-span-5 space-y-5">
           <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
-            <div className="px-5 py-3 border-b border-slate-200 bg-[#F8FAFC] flex items-center justify-between">
+            <div className="px-5 py-3 border-b border-slate-200 bg-[#F8FAFC] flex items-center justify-between gap-2">
               <h3 className="font-display text-sm font-semibold text-slate-900">
-                6. Inbox Preview
+                Inbox Preview
               </h3>
-              <div className="inline-flex p-0.5 bg-slate-200/70 rounded-md">
-                <button
-                  type="button"
-                  onClick={() => setPreviewViewport('desktop')}
-                  className={`p-1 rounded ${
-                    previewViewport === 'desktop' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500'
-                  }`}
-                  title="Desktop preview"
-                >
-                  <Monitor className="w-3.5 h-3.5" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setPreviewViewport('mobile')}
-                  className={`p-1 rounded ${
-                    previewViewport === 'mobile' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500'
-                  }`}
-                  title="Mobile preview"
-                >
-                  <Smartphone className="w-3.5 h-3.5" />
-                </button>
+              <div className="flex items-center gap-2">
+                {recipientSet.length > 1 && (
+                  <div className="inline-flex items-center border border-slate-200 rounded-md bg-white">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setPreviewIndex((prev) =>
+                          prev <= 0 ? recipientSet.length - 1 : prev - 1
+                        )
+                      }
+                      className="p-1 text-slate-500 hover:text-slate-800"
+                      aria-label="Previous recipient preview"
+                    >
+                      <ChevronLeft className="w-3.5 h-3.5" />
+                    </button>
+                    <span className="px-1.5 text-[10px] font-mono text-slate-600 tabular-nums">
+                      {activePreviewIdx + 1}/{recipientSet.length}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setPreviewIndex((prev) =>
+                          prev >= recipientSet.length - 1 ? 0 : prev + 1
+                        )
+                      }
+                      className="p-1 text-slate-500 hover:text-slate-800"
+                      aria-label="Next recipient preview"
+                    >
+                      <ChevronRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                )}
+                <div className="inline-flex p-0.5 bg-slate-200/70 rounded-md">
+                  <button
+                    type="button"
+                    onClick={() => setPreviewViewport('desktop')}
+                    className={`p-1 rounded ${
+                      previewViewport === 'desktop' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500'
+                    }`}
+                    title="Desktop preview"
+                  >
+                    <Monitor className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPreviewViewport('mobile')}
+                    className={`p-1 rounded ${
+                      previewViewport === 'mobile' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500'
+                    }`}
+                    title="Mobile preview"
+                  >
+                    <Smartphone className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -795,7 +884,7 @@ export const EmailPage: React.FC = () => {
             <div className="flex items-center gap-2">
               <TestTube className="w-4 h-4 text-blue-600" />
               <h3 className="font-display text-sm font-semibold text-slate-900">
-                7. Send Test Email
+                Send Test Email
               </h3>
             </div>
             <div className="flex gap-2">

@@ -11,6 +11,8 @@ import {
   BookmarkPlus,
   Search,
   ShieldCheck,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import { apiRequest } from '../lib/api';
 import { Campaign, Contact, ContactGroup, Template } from '../types';
@@ -45,6 +47,7 @@ export const WhatsAppPage: React.FC = () => {
   const [savingDraft, setSavingDraft] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [sending, setSending] = useState(false);
+  const [previewIndex, setPreviewIndex] = useState(0);
 
   useEffect(() => {
     (async () => {
@@ -84,6 +87,12 @@ export const WhatsAppPage: React.FC = () => {
     [contacts]
   );
 
+  const allEligibleTags = useMemo(() => {
+    const set = new Set<string>();
+    eligibleContacts.forEach((c) => c.tags.forEach((t) => set.add(t)));
+    return Array.from(set).sort();
+  }, [eligibleContacts]);
+
   const visibleEligibleContacts = useMemo(() => {
     const q = recipientSearch.trim().toLowerCase();
     if (!q) return eligibleContacts;
@@ -104,7 +113,10 @@ export const WhatsAppPage: React.FC = () => {
     return eligibleContacts.filter((c) => ids.has(c.id));
   }, [eligibleContacts, selectedContactIds, selectedGroupIds]);
 
-  const sampleContact = recipientSet[0] ||
+  const activePreviewIdx =
+    recipientSet.length > 0 ? Math.min(previewIndex, recipientSet.length - 1) : 0;
+
+  const sampleContact = recipientSet[activePreviewIdx] ||
     eligibleContacts[0] || { name: 'Alex Rivera', phone: '+15550192834' };
 
   const previewText = useMemo(() => {
@@ -112,6 +124,24 @@ export const WhatsAppPage: React.FC = () => {
       .replace(/\{\{\s*name\s*\}\}/gi, sampleContact.name)
       .replace(/\{\{\s*phone\s*\}\}/gi, sampleContact.phone || '+15550192834');
   }, [body, sampleContact]);
+
+  const selectedTemplate = useMemo(
+    () => templates.find((t) => String(t.id) === selectedTemplateId),
+    [templates, selectedTemplateId]
+  );
+
+  const toggleTagSelection = (tag: string) => {
+    const matchingIds = eligibleContacts
+      .filter((c) => c.tags.includes(tag))
+      .map((c) => c.id);
+    if (!matchingIds.length) return;
+    const allSelected = matchingIds.every((id) => selectedContactIds.includes(id));
+    setSelectedContactIds((prev) =>
+      allSelected
+        ? prev.filter((id) => !matchingIds.includes(id))
+        : Array.from(new Set([...prev, ...matchingIds]))
+    );
+  };
 
   const approvedTemplates = templates.filter((t) => t.templateCategory === 'whatsapp_approved');
   const draftTemplates = templates.filter((t) => t.templateCategory !== 'whatsapp_approved');
@@ -367,6 +397,24 @@ export const WhatsAppPage: React.FC = () => {
               </div>
             </div>
 
+            {selectedTemplate?.templateCategory === 'whatsapp_approved' && (
+              <div className="px-3.5 py-2.5 rounded-lg bg-emerald-50/70 border border-emerald-200 flex flex-wrap items-center justify-between gap-2 text-xs">
+                <div className="flex items-center gap-2 text-emerald-900">
+                  <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span>
+                    Meta Approved Template:{' '}
+                    <strong className="font-mono">
+                      {selectedTemplate.metaTemplateName || selectedTemplate.name}
+                    </strong>{' '}
+                    · {selectedTemplate.metaLanguage || 'en_US'}
+                  </span>
+                </div>
+                <span className="text-[11px] font-mono text-emerald-700">
+                  Dispatched via template payload
+                </span>
+              </div>
+            )}
+
             {/* Recipients & Groups */}
             <div className="pt-4 border-t border-slate-200 space-y-4">
               <div className="flex items-center justify-between">
@@ -412,6 +460,34 @@ export const WhatsAppPage: React.FC = () => {
                   })}
                 </div>
               </div>
+
+              {allEligibleTags.length > 0 && (
+                <div>
+                  <p className="text-xs font-medium text-slate-600 mb-2">Quick-Target by Tag</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {allEligibleTags.map((tag) => {
+                      const matching = eligibleContacts.filter((c) => c.tags.includes(tag));
+                      const active =
+                        matching.length > 0 &&
+                        matching.every((c) => selectedContactIds.includes(c.id));
+                      return (
+                        <button
+                          key={tag}
+                          type="button"
+                          onClick={() => toggleTagSelection(tag)}
+                          className={`px-2.5 py-1 text-[11px] font-medium rounded-md border transition-colors ${
+                            active
+                              ? 'bg-emerald-50 border-emerald-300 text-emerald-800'
+                              : 'bg-[#F8FAFC] border-slate-200 text-slate-600 hover:bg-slate-100'
+                          }`}
+                        >
+                          #{tag} ({matching.length})
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
               <div>
                 <div className="flex items-center justify-between gap-3 mb-2">
@@ -518,13 +594,46 @@ export const WhatsAppPage: React.FC = () => {
         {/* Right: Authentic Mobile WhatsApp Device Preview & Test Send */}
         <div className="lg:col-span-5 space-y-5">
           <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-3">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-2">
               <h3 className="font-display text-sm font-semibold text-slate-900">
                 WhatsApp Device Preview
               </h3>
-              <span className="text-[11px] text-slate-500 truncate max-w-[160px]">
-                Recipient: {sampleContact.name}
-              </span>
+              <div className="flex items-center gap-1.5">
+                {recipientSet.length > 1 && (
+                  <div className="inline-flex items-center border border-slate-200 rounded-md bg-[#F8FAFC]">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setPreviewIndex((prev) =>
+                          prev <= 0 ? recipientSet.length - 1 : prev - 1
+                        )
+                      }
+                      className="p-1 text-slate-500 hover:text-slate-800"
+                      aria-label="Previous recipient preview"
+                    >
+                      <ChevronLeft className="w-3.5 h-3.5" />
+                    </button>
+                    <span className="px-1.5 text-[10px] font-mono text-slate-600 tabular-nums">
+                      {activePreviewIdx + 1}/{recipientSet.length}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setPreviewIndex((prev) =>
+                          prev >= recipientSet.length - 1 ? 0 : prev + 1
+                        )
+                      }
+                      className="p-1 text-slate-500 hover:text-slate-800"
+                      aria-label="Next recipient preview"
+                    >
+                      <ChevronRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                )}
+                <span className="text-[11px] text-slate-500 truncate max-w-[140px]">
+                  {sampleContact.name}
+                </span>
+              </div>
             </div>
 
             {/* Mobile Frame */}

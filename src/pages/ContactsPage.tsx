@@ -396,6 +396,55 @@ export const ContactsPage: React.FC = () => {
     return m;
   }, [groups]);
 
+  const handleExportCsv = () => {
+    const targetList =
+      selectedIds.length > 0
+        ? contacts.filter((c) => selectedIds.includes(c.id))
+        : filteredContacts;
+
+    if (!targetList.length) {
+      showToast('No contacts to export', 'Add or adjust filters before exporting.', 'error');
+      return;
+    }
+
+    const esc = (v: string) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+    const header = [
+      'name',
+      'phone',
+      'email',
+      'tags',
+      'groups',
+      'whatsapp_opt_in',
+      'email_opt_in',
+      'suppressed_email',
+    ].join(',');
+    const rows = targetList.map((c) => {
+      const grpNames = c.groupIds
+        .map((id) => groupMap.get(id))
+        .filter(Boolean)
+        .join('; ');
+      return [
+        esc(c.name),
+        esc(c.phone || ''),
+        esc(c.email || ''),
+        esc(c.tags.join(', ')),
+        esc(grpNames),
+        c.whatsappOptIn && !c.whatsappOptOutAt ? 'yes' : 'no',
+        c.emailOptIn && !c.suppressedEmail ? 'yes' : 'no',
+        c.suppressedEmail ? 'yes' : 'no',
+      ].join(',');
+    });
+
+    const blob = new Blob([[header, ...rows].join('\n')], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `connectflow_contacts_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast('Contacts exported', `${targetList.length} contact(s) saved to CSV.`, 'success');
+  };
+
   return (
     <div className="space-y-6">
       {/* Page Header */}
@@ -417,6 +466,14 @@ export const ContactsPage: React.FC = () => {
           >
             <FolderPlus className="w-3.5 h-3.5" />
             <span>New Group</span>
+          </button>
+          <button
+            type="button"
+            onClick={handleExportCsv}
+            className="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors whitespace-nowrap"
+          >
+            <Download className="w-3.5 h-3.5" />
+            <span>{selectedIds.length > 0 ? `Export (${selectedIds.length})` : 'Export CSV'}</span>
           </button>
           <button
             type="button"

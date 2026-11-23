@@ -7,6 +7,7 @@ import {
   contacts,
   integrations,
   auditLogs,
+  templates,
 } from '../db/schema.ts';
 
 export function personalizeMessage(
@@ -31,13 +32,14 @@ export async function sendWhatsAppMessage(params: {
   body: string;
   metaTemplateName?: string | null;
   metaLanguage?: string | null;
+  templateParams?: string[];
 }): Promise<{
   success: boolean;
   simulated: boolean;
   providerMessageId?: string;
   errorMessage?: string;
 }> {
-  const { integration, toPhone, body, metaTemplateName, metaLanguage } = params;
+  const { integration, toPhone, body, metaTemplateName, metaLanguage, templateParams } = params;
   const formattedPhone = normalizePhoneE164(toPhone);
   if (!formattedPhone || formattedPhone.length < 8) {
     return {
@@ -75,6 +77,19 @@ export async function sendWhatsAppMessage(params: {
           template: {
             name: metaTemplateName,
             language: { code: metaLanguage || 'en_US' },
+            ...(templateParams && templateParams.length > 0
+              ? {
+                  components: [
+                    {
+                      type: 'body',
+                      parameters: templateParams.map((val) => ({
+                        type: 'text',
+                        text: val,
+                      })),
+                    },
+                  ],
+                }
+              : {}),
           },
         }
       : {
@@ -273,25 +288,40 @@ export async function executeCampaignById(campaignId: number, appBaseUrl: string
       .where(eq(integrations.userId, campaign.userId))
       .limit(1);
 
+    let waMetaTemplate: typeof templates.$inferSelect | undefined;
+    if (campaign.channel === 'whatsapp' && campaign.templateId) {
+      const [tpl] = await db
+        .select()
+        .from(templates)
+        .where(eq(templates.id, campaign.templateId))
+        .limit(1);
+      if (tpl && tpl.templateCategory === 'whatsapp_approved' && tpl.metaTemplateName) {
+        waMetaTemplate = tpl;
+      }
+    }
+
     const recipients = await db
       .select()
       .from(campaignRecipients)
       .where(eq(campaignRecipients.campaignId, campaignId));
 
-    let sentCount = 0;
-    let deliveredCount = 0;
-    let readCount = 0;
-    let bouncedCount = 0;
-    let failedCount = 0;
-
     for (const rec of recipients) {
       if (rec.status !== 'queued') continue;
 
       if (campaign.channel === 'whatsapp') {
+        const templateParams: string[] = [];
+        if (waMetaTemplate) {
+          if (/\{\{\s*name\s*\}\}/i.test(campaign.body)) templateParams.push(rec.contactName);
+          if (/\{\{\s*phone\s*\}\}/i.test(campaign.body)) templateParams.push(rec.destination);
+        }
+
         const result = await sendWhatsAppMessage({
           integration,
           toPhone: rec.destination,
           body: rec.renderedBody,
+          metaTemplateName: waMetaTemplate?.metaTemplateName || null,
+          metaLanguage: waMetaTemplate?.metaLanguage || null,
+          templateParams,
         });
 
         const nextStatus = result.success
@@ -310,15 +340,6 @@ export async function executeCampaignById(campaignId: number, appBaseUrl: string
             updatedAt: new Date(),
           })
           .where(eq(campaignRecipients.id, rec.id));
-
-        if (result.success) {
-          sentCount++;
-          if (result.simulated) {
-            deliveredCount++;
-          }
-        } else {
-          failedCount++;
-        }
       } else {
         const unsubUrl = rec.contactId
           ? `${appBaseUrl.replace(/\/$/, '')}/api/unsubscribe?cid=${rec.contactId}&u=${campaign.userId}`
@@ -356,22 +377,27 @@ export async function executeCampaignById(campaignId: number, appBaseUrl: string
             updatedAt: new Date(),
           })
           .where(eq(campaignRecipients.id, rec.id));
-
-        if (result.success) {
-          sentCount++;
-          if (result.simulated) {
-            deliveredCount++;
-          }
-        } else if (result.bounced) {
-          bouncedCount++;
-        } else {
-          failedCount++;
-        }
       }
 
       // Gentle rate-limit pacing between bulk sends
       await new Promise((r) => setTimeout(r, 60));
     }
+
+    // Recompute exact totals across all recipient rows (supports retries cleanly)
+    const allRecs = await db
+      .select()
+      .from(campaignRecipients)
+      .where(eq(campaignRecipients.campaignId, campaignId));
+
+    const sentCount = allRecs.filter((r) =>
+      ['sent', 'delivered', 'read'].includes(r.status)
+    ).length;
+    const deliveredCount = allRecs.filter((r) =>
+      ['delivered', 'read'].includes(r.status)
+    ).length;
+    const readCount = allRecs.filter((r) => r.status === 'read').length;
+    const bouncedCount = allRecs.filter((r) => r.status === 'bounced').length;
+    const failedCount = allRecs.filter((r) => r.status === 'failed').length;
 
     const finalStatus =
       sentCount === 0 && (failedCount > 0 || bouncedCount > 0) ? 'failed' : 'completed';
