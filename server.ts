@@ -1,10 +1,11 @@
 import 'dotenv/config';
 import express from 'express';
+import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import nodemailer from 'nodemailer';
 import { eq, desc, and, inArray } from 'drizzle-orm';
-import { db } from './src/db/index.ts';
+import { db, pool } from './src/db/index.ts';
 import {
   users,
   integrations,
@@ -16,7 +17,8 @@ import {
   auditLogs,
 } from './src/db/schema.ts';
 import { getOrCreateUser } from './src/db/users.ts';
-import { requireAuth, AuthRequest } from './src/middleware/auth.ts';
+import { requireAuth } from './src/middleware/auth.ts';
+import type { AuthRequest } from './src/middleware/auth.ts';
 import {
   executeCampaignById,
   markContactUnsubscribed,
@@ -31,7 +33,36 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
+app.set('trust proxy', 1);
+app.disable('x-powered-by');
 app.use(express.json({ limit: '5mb' }));
+app.use((_req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  next();
+});
+
+function isSafeExternalSmtpHost(rawHost: string): boolean {
+  const host = rawHost.trim().toLowerCase();
+  if (!host || host.length > 253) return false;
+  if (
+    host === 'localhost' ||
+    host === '0.0.0.0' ||
+    host === '::1' ||
+    host === '[::1]' ||
+    host.endsWith('.local') ||
+    host.endsWith('.internal') ||
+    host.startsWith('127.') ||
+    host.startsWith('10.') ||
+    host.startsWith('192.168.') ||
+    host.startsWith('169.254.') ||
+    /^172\.(1[6-9]|2\d|3[01])\./.test(host)
+  ) {
+    return false;
+  }
+  return /^[a-z0-9.-]+$/.test(host);
+}
 
 function getAppBaseUrl(req: express.Request): string {
   if (process.env.APP_URL) return process.env.APP_URL;
@@ -88,9 +119,19 @@ function sanitizeIntegration(row: typeof integrations.$inferSelect | undefined) 
   };
 }
 
-// Health check
-app.get('/api/health', (_req, res) => {
-  res.json({ status: 'ok' });
+// Health check (verifies Cloud SQL connectivity for production readiness probes)
+app.get('/api/health', async (_req, res) => {
+  try {
+    await pool.query('SELECT 1');
+    res.json({
+      status: 'ok',
+      database: 'connected',
+      uptimeSeconds: Math.round(process.uptime()),
+    });
+  } catch (error) {
+    console.error('Health check database failure:', error);
+    res.status(503).json({ status: 'degraded', database: 'unavailable' });
+  }
 });
 
 // Public One-Click Unsubscribe Endpoint
@@ -405,6 +446,9 @@ app.put('/api/integrations/email', requireAuth, async (req: AuthRequest, res) =>
           return res.status(400).json({
             error: 'SMTP Host, Username, and App Password / SMTP Password are required for Live SMTP mode.',
           });
+        }
+        if (!isSafeExternalSmtpHost(String(finalHost))) {
+          return res.status(400).json({ error: 'Please provide a valid public SMTP server hostname.' });
         }
       }
     }
@@ -1527,6 +1571,10 @@ app.get('/api/audit-logs', requireAuth, async (req: AuthRequest, res) => {
 const PORT = Number(process.env.PORT) || 3000;
 
 async function startServer() {
+  app.all('/api/*', (_req, res) => {
+    res.status(404).json({ error: 'API endpoint not found' });
+  });
+
   if (process.env.NODE_ENV !== 'production') {
     const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
@@ -1536,15 +1584,30 @@ async function startServer() {
     app.use(vite.middlewares);
   } else {
     const distPath = path.resolve(__dirname, 'dist');
-    app.use(express.static(distPath));
+    const indexHtml = path.join(distPath, 'index.html');
+    if (!fs.existsSync(indexHtml)) {
+      console.warn('Warning: dist/index.html not found. Run "npm run build" before starting in production.');
+    }
+    app.use(express.static(distPath, { maxAge: '1d', index: false }));
     app.get('*', (_req, res) => {
-      res.sendFile(path.join(distPath, 'index.html'));
+      res.sendFile(indexHtml);
     });
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
-    console.log(`ConnectFlow server listening on http://0.0.0.0:${PORT}`);
+  const server = app.listen(PORT, '0.0.0.0', () => {
+    console.log(`ConnectFlow server listening on http://0.0.0.0:${PORT} (${process.env.NODE_ENV || 'development'})`);
   });
+
+  const shutdown = (signal: string) => {
+    console.log(`Received ${signal}, shutting down ConnectFlow server...`);
+    server.close(() => {
+      void pool.end().finally(() => process.exit(0));
+    });
+    setTimeout(() => process.exit(1), 10000).unref();
+  };
+
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on('SIGINT', () => shutdown('SIGINT'));
 }
 
 startServer();

@@ -24,6 +24,7 @@ import { Campaign, Contact, ContactGroup, Template } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../components/ToastContext';
 import { ConnectEmailModal } from '../components/ConnectEmailModal';
+import { sanitizeEmailHtml } from '../lib/sanitize';
 
 export const EmailPage: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -106,8 +107,11 @@ export const EmailPage: React.FC = () => {
   }, [searchParams]);
 
   useEffect(() => {
-    if (editorMode === 'visual' && visualRef.current && visualRef.current.innerHTML !== body) {
-      visualRef.current.innerHTML = body;
+    if (editorMode === 'visual' && visualRef.current) {
+      const safe = sanitizeEmailHtml(body);
+      if (visualRef.current.innerHTML !== safe) {
+        visualRef.current.innerHTML = safe;
+      }
     }
   }, [editorMode, selectedTemplateId]);
 
@@ -165,9 +169,11 @@ export const EmailPage: React.FC = () => {
 
   const previewBody = useMemo(
     () =>
-      body
-        .replace(/\{\{\s*name\s*\}\}/gi, sampleContact.name)
-        .replace(/\{\{\s*email\s*\}\}/gi, sampleContact.email || 'alex@company.com'),
+      sanitizeEmailHtml(
+        body
+          .replace(/\{\{\s*name\s*\}\}/gi, sampleContact.name)
+          .replace(/\{\{\s*email\s*\}\}/gi, sampleContact.email || 'alex@company.com')
+      ),
     [body, sampleContact]
   );
 
@@ -228,8 +234,9 @@ export const EmailPage: React.FC = () => {
     const found = templates.find((t) => String(t.id) === id);
     if (found) {
       if (found.subject) setSubject(found.subject);
-      setBody(found.body);
-      if (visualRef.current) visualRef.current.innerHTML = found.body;
+      const safe = sanitizeEmailHtml(found.body);
+      setBody(safe);
+      if (visualRef.current) visualRef.current.innerHTML = safe;
     }
   };
 

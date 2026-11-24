@@ -1,6 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import * as XLSX from 'xlsx';
 import {
   Plus,
   Upload,
@@ -297,6 +296,7 @@ export const ContactsPage: React.FC = () => {
     const isExcel = /\.(xlsx|xls)$/i.test(file.name);
     setImportSource(isExcel ? 'excel' : 'csv');
     try {
+      const XLSX = await import('xlsx');
       const buffer = await file.arrayBuffer();
       const wb = XLSX.read(buffer, { type: 'array' });
       const firstSheet = wb.Sheets[wb.SheetNames[0]];

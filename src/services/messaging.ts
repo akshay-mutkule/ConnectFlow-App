@@ -9,6 +9,7 @@ import {
   auditLogs,
   templates,
 } from '../db/schema.ts';
+import { sanitizeEmailHtml } from '../lib/sanitize.ts';
 
 export function personalizeMessage(
   template: string,
@@ -157,9 +158,10 @@ export async function sendEmailMessage(params: {
     };
   }
 
+  const safeHtmlBody = sanitizeEmailHtml(htmlBody);
   const finalHtml = unsubscribeUrl
-    ? `${htmlBody}<hr style="margin-top:24px;border:none;border-top:1px solid #e2e8f0;"/><p style="font-size:12px;color:#64748b;font-family:sans-serif;">You received this message because you opted in to communications. <a href="${unsubscribeUrl}" style="color:#2563eb;">Unsubscribe</a></p>`
-    : htmlBody;
+    ? `${safeHtmlBody}<hr style="margin-top:24px;border:none;border-top:1px solid #e2e8f0;"/><p style="font-size:12px;color:#64748b;font-family:sans-serif;">You received this message because you opted in to communications. <a href="${unsubscribeUrl}" style="color:#2563eb;">Unsubscribe</a></p>`
+    : safeHtmlBody;
 
   const isSmtpLive =
     Boolean(integration?.emailConnected) &&

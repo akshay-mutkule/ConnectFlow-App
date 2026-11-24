@@ -104,17 +104,21 @@ export const SettingsPage: React.FC = () => {
   const handleTestConnection = async (channel: 'whatsapp' | 'email') => {
     setTestingChannel(channel);
     try {
-      const res = await apiRequest<{ ok: boolean; mode: string; message: string }>(
+      const res = await apiRequest<{ ok: boolean; mode: string; details?: string; message?: string }>(
         '/api/integrations/test-connection',
         {
           method: 'POST',
           body: JSON.stringify({ channel }),
         }
       );
-      setTestResults((prev) => ({ ...prev, [channel]: res }));
+      const summary = res.details || res.message || 'Connection verified successfully.';
+      setTestResults((prev) => ({
+        ...prev,
+        [channel]: { ok: res.ok, mode: res.mode, message: summary },
+      }));
       showToast(
         `${channel === 'whatsapp' ? 'WhatsApp' : 'Email'} connection verified`,
-        res.message,
+        summary,
         'success'
       );
     } catch (err: any) {
