@@ -14,9 +14,11 @@ import {
   MessageSquare,
   Mail,
   Download,
+  Tag,
+  Clock,
 } from 'lucide-react';
 import { apiRequest } from '../lib/api';
-import { Contact, ContactGroup } from '../types';
+import { Contact, ContactGroup, ContactHistoryItem } from '../types';
 import { useToast } from '../components/ToastContext';
 
 export const ContactsPage: React.FC = () => {
@@ -34,7 +36,10 @@ export const ContactsPage: React.FC = () => {
   const [consentFilter, setConsentFilter] = useState<'all' | 'whatsapp' | 'email'>('all');
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [inspectedContact, setInspectedContact] = useState<Contact | null>(null);
+  const [contactHistory, setContactHistory] = useState<ContactHistoryItem[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
   const [bulkGroupId, setBulkGroupId] = useState<string>('');
+  const [bulkTagInput, setBulkTagInput] = useState<string>('');
 
   // Modals
   const [contactModalOpen, setContactModalOpen] = useState(false);
@@ -89,6 +94,28 @@ export const ContactsPage: React.FC = () => {
   useEffect(() => {
     loadData();
   }, []);
+
+  useEffect(() => {
+    if (!inspectedContact) {
+      setContactHistory([]);
+      return;
+    }
+    let active = true;
+    setHistoryLoading(true);
+    apiRequest<{ history: ContactHistoryItem[] }>(`/api/contacts/${inspectedContact.id}/history`)
+      .then((res) => {
+        if (active) setContactHistory(res.history);
+      })
+      .catch(() => {
+        if (active) setContactHistory([]);
+      })
+      .finally(() => {
+        if (active) setHistoryLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [inspectedContact?.id]);
 
   const allTags = useMemo(() => {
     const set = new Set<string>();
@@ -252,8 +279,16 @@ export const ContactsPage: React.FC = () => {
   };
 
   const runBulkAction = async (
-    action: 'add_group' | 'whatsapp_opt_in' | 'email_opt_in' | 'delete',
-    groupId?: number
+    action:
+      | 'add_group'
+      | 'add_tag'
+      | 'whatsapp_opt_in'
+      | 'whatsapp_opt_out'
+      | 'email_opt_in'
+      | 'email_opt_out'
+      | 'unsuppress_email'
+      | 'delete',
+    opts?: { groupId?: number; tag?: string }
   ) => {
     if (!selectedIds.length) return;
     try {
@@ -261,7 +296,12 @@ export const ContactsPage: React.FC = () => {
         '/api/contacts/bulk-action',
         {
           method: 'POST',
-          body: JSON.stringify({ ids: selectedIds, action, groupId }),
+          body: JSON.stringify({
+            ids: selectedIds,
+            action,
+            groupId: opts?.groupId,
+            tag: opts?.tag,
+          }),
         }
       );
       if (action === 'delete') {
@@ -271,6 +311,9 @@ export const ContactsPage: React.FC = () => {
       } else if (res.contacts) {
         const updatedMap = new Map(res.contacts.map((c) => [c.id, c]));
         setContacts((prev) => prev.map((c) => updatedMap.get(c.id) || c));
+        if (inspectedContact && updatedMap.has(inspectedContact.id)) {
+          setInspectedContact(updatedMap.get(inspectedContact.id)!);
+        }
         showToast('Bulk update applied', `${selectedIds.length} contact(s) updated`, 'success');
       }
     } catch (err: any) {
@@ -629,7 +672,7 @@ export const ContactsPage: React.FC = () => {
             </div>
 
             {selectedIds.length > 0 && (
-              <div className="flex flex-wrap items-center gap-2 bg-white border border-slate-200 rounded-lg px-3 py-1.5 shadow-sm">
+              <div className="flex flex-wrap items-center gap-1.5 bg-white border border-slate-200 rounded-lg px-3 py-1.5 shadow-sm">
                 <span className="font-mono font-semibold text-slate-800 tabular-nums mr-1">
                   {selectedIds.length} selected
                 </span>
@@ -638,7 +681,7 @@ export const ContactsPage: React.FC = () => {
                   onChange={(e) => {
                     const val = e.target.value;
                     if (val) {
-                      void runBulkAction('add_group', Number(val));
+                      void runBulkAction('add_group', { groupId: Number(val) });
                       setBulkGroupId('');
                     }
                   }}
@@ -651,24 +694,67 @@ export const ContactsPage: React.FC = () => {
                     </option>
                   ))}
                 </select>
+                <div className="inline-flex items-center border border-slate-200 rounded bg-slate-50 overflow-hidden">
+                  <Tag className="w-3 h-3 text-slate-400 ml-2 shrink-0" />
+                  <input
+                    type="text"
+                    value={bulkTagInput}
+                    onChange={(e) => setBulkTagInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && bulkTagInput.trim()) {
+                        e.preventDefault();
+                        void runBulkAction('add_tag', { tag: bulkTagInput.trim() });
+                        setBulkTagInput('');
+                      }
+                    }}
+                    placeholder="Add tag..."
+                    className="w-24 px-1.5 py-1 text-xs bg-transparent focus:outline-none text-slate-700"
+                  />
+                  {bulkTagInput.trim() && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        void runBulkAction('add_tag', { tag: bulkTagInput.trim() });
+                        setBulkTagInput('');
+                      }}
+                      className="px-2 py-1 text-[11px] font-semibold text-blue-600 hover:bg-blue-50 border-l border-slate-200"
+                    >
+                      Apply
+                    </button>
+                  )}
+                </div>
                 <button
                   type="button"
                   onClick={() => runBulkAction('whatsapp_opt_in')}
-                  className="px-2 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-50 rounded"
+                  className="px-2 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-50 rounded whitespace-nowrap"
                 >
                   Enable WA
                 </button>
                 <button
                   type="button"
+                  onClick={() => runBulkAction('whatsapp_opt_out')}
+                  className="px-2 py-1 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded whitespace-nowrap"
+                >
+                  Disable WA
+                </button>
+                <button
+                  type="button"
                   onClick={() => runBulkAction('email_opt_in')}
-                  className="px-2 py-1 text-xs font-medium text-blue-600 hover:bg-blue-50 rounded"
+                  className="px-2 py-1 text-xs font-medium text-blue-600 hover:bg-blue-50 rounded whitespace-nowrap"
                 >
                   Enable Email
                 </button>
                 <button
                   type="button"
+                  onClick={() => runBulkAction('email_opt_out')}
+                  className="px-2 py-1 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded whitespace-nowrap"
+                >
+                  Disable Email
+                </button>
+                <button
+                  type="button"
                   onClick={() => runBulkAction('delete')}
-                  className="px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50 rounded inline-flex items-center gap-1"
+                  className="px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50 rounded inline-flex items-center gap-1 whitespace-nowrap"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
                   <span>Delete</span>
@@ -1008,6 +1094,63 @@ export const ContactsPage: React.FC = () => {
                     <span>Send Email</span>
                   </button>
                 </div>
+              </div>
+
+              <div className="space-y-2.5 pt-2 border-t border-slate-100">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-semibold text-slate-500">Campaign Outreach History</p>
+                  <span className="text-[11px] font-mono text-slate-400 tabular-nums">
+                    {contactHistory.length} event(s)
+                  </span>
+                </div>
+                {historyLoading ? (
+                  <p className="text-xs text-slate-400 py-3">Loading outreach log...</p>
+                ) : contactHistory.length === 0 ? (
+                  <p className="text-xs text-slate-400 py-3">
+                    No WhatsApp or Email campaigns dispatched to this contact yet.
+                  </p>
+                ) : (
+                  <div className="border border-slate-200 rounded-xl divide-y divide-slate-100 max-h-56 overflow-y-auto">
+                    {contactHistory.map((item) => (
+                      <div key={item.id} className="p-3 space-y-1 hover:bg-[#F8FAFC] transition-colors">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-xs font-semibold text-slate-800 truncate">
+                            {item.campaignName}
+                          </span>
+                          <span
+                            className={`text-[11px] font-semibold capitalize shrink-0 ${
+                              item.status === 'delivered' || item.status === 'read' || item.status === 'sent'
+                                ? 'text-emerald-700'
+                                : item.status === 'failed' || item.status === 'bounced'
+                                  ? 'text-red-600'
+                                  : 'text-slate-500'
+                            }`}
+                          >
+                            {item.status}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between gap-2 text-[11px] text-slate-500 font-mono">
+                          <span
+                            className={
+                              item.channel === 'whatsapp' ? 'text-emerald-700' : 'text-blue-600'
+                            }
+                          >
+                            {item.channel === 'whatsapp' ? 'WhatsApp' : 'Email'} · {item.executionMode}
+                          </span>
+                          <span className="inline-flex items-center gap-1 tabular-nums">
+                            <Clock className="w-3 h-3" />
+                            {new Date(item.updatedAt).toLocaleDateString()}
+                          </span>
+                        </div>
+                        {item.errorMessage && (
+                          <p className="text-[11px] text-red-600 font-mono truncate">
+                            {item.errorMessage}
+                          </p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
 

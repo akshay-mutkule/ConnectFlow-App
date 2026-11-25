@@ -446,10 +446,39 @@ export async function processDueScheduledCampaigns(userId: number, appBaseUrl: s
       );
 
     for (const c of due) {
-      await executeCampaignById(c.id, appBaseUrl);
+      const claimed = await db
+        .update(campaigns)
+        .set({ status: 'sending' })
+        .where(and(eq(campaigns.id, c.id), eq(campaigns.status, 'scheduled')))
+        .returning({ id: campaigns.id });
+      if (claimed.length > 0) {
+        await executeCampaignById(c.id, appBaseUrl);
+      }
     }
   } catch (error) {
     console.error('Failed processing due scheduled campaigns:', error);
+  }
+}
+
+export async function processAllDueScheduledCampaigns(appBaseUrl: string) {
+  try {
+    const due = await db
+      .select()
+      .from(campaigns)
+      .where(and(eq(campaigns.status, 'scheduled'), lte(campaigns.scheduledAt, new Date())));
+
+    for (const c of due) {
+      const claimed = await db
+        .update(campaigns)
+        .set({ status: 'sending' })
+        .where(and(eq(campaigns.id, c.id), eq(campaigns.status, 'scheduled')))
+        .returning({ id: campaigns.id });
+      if (claimed.length > 0) {
+        await executeCampaignById(c.id, appBaseUrl);
+      }
+    }
+  } catch (error) {
+    console.error('Background scheduler failed processing due campaigns:', error);
   }
 }
 

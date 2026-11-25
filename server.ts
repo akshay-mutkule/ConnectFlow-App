@@ -24,6 +24,7 @@ import {
   markContactUnsubscribed,
   normalizePhoneE164,
   personalizeMessage,
+  processAllDueScheduledCampaigns,
   processDueScheduledCampaigns,
   sendEmailMessage,
   sendWhatsAppMessage,
@@ -62,6 +63,12 @@ function isSafeExternalSmtpHost(rawHost: string): boolean {
     return false;
   }
   return /^[a-z0-9.-]+$/.test(host);
+}
+
+function parsePositiveId(raw: unknown): number | null {
+  const num = Number(raw);
+  if (!Number.isInteger(num) || num <= 0) return null;
+  return num;
 }
 
 function getAppBaseUrl(req: express.Request): string {
@@ -492,16 +499,28 @@ app.get('/api/dashboard', requireAuth, async (req: AuthRequest, res) => {
     const dbUser = await resolveDbUser(req);
     await processDueScheduledCampaigns(dbUser.id, getAppBaseUrl(req));
 
+    const rangeParam = req.query.range === '7d' ? '7d' : req.query.range === '30d' ? '30d' : 'all';
+    const rangeCutoff =
+      rangeParam === '7d'
+        ? new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+        : rangeParam === '30d'
+          ? new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+          : null;
+
     const userContacts = await db
       .select()
       .from(contacts)
       .where(eq(contacts.userId, dbUser.id));
 
-    const userCampaigns = await db
+    const allUserCampaigns = await db
       .select()
       .from(campaigns)
       .where(eq(campaigns.userId, dbUser.id))
       .orderBy(desc(campaigns.createdAt));
+
+    const userCampaigns = rangeCutoff
+      ? allUserCampaigns.filter((c) => new Date(c.createdAt) >= rangeCutoff)
+      : allUserCampaigns;
 
     const recentLogs = await db
       .select()
@@ -540,7 +559,35 @@ app.get('/api/dashboard', requireAuth, async (req: AuthRequest, res) => {
       0
     );
 
+    // Build Daily Send Trend buckets (7 days for 7d, 14 days for 30d/all)
+    const trendDays = rangeParam === '7d' ? 7 : 14;
+    const trendMap = new Map<
+      string,
+      { date: string; label: string; whatsappSent: number; emailSent: number; delivered: number; failed: number }
+    >();
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    for (let i = trendDays - 1; i >= 0; i--) {
+      const d = new Date(today.getTime() - i * 24 * 60 * 60 * 1000);
+      const iso = d.toISOString().slice(0, 10);
+      const label = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      trendMap.set(iso, { date: iso, label, whatsappSent: 0, emailSent: 0, delivered: 0, failed: 0 });
+    }
+    for (const c of userCampaigns) {
+      const iso = new Date(c.createdAt).toISOString().slice(0, 10);
+      const bucket = trendMap.get(iso);
+      if (!bucket) continue;
+      if (c.channel === 'whatsapp') {
+        bucket.whatsappSent += c.sentCount;
+      } else {
+        bucket.emailSent += c.sentCount;
+      }
+      bucket.delivered += Math.max(c.deliveredCount, c.sentCount - c.failedCount - c.bouncedCount);
+      bucket.failed += c.failedCount + c.bouncedCount;
+    }
+
     res.json({
+      range: rangeParam,
       stats: {
         totalContacts: userContacts.length,
         whatsappOptedIn: userContacts.filter((c) => c.whatsappOptIn && !c.whatsappOptOutAt).length,
@@ -557,6 +604,7 @@ app.get('/api/dashboard', requireAuth, async (req: AuthRequest, res) => {
         suppressedCount: userContacts.filter((c) => c.suppressedEmail || Boolean(c.emailUnsubscribedAt)).length,
         whatsappOptOutCount: userContacts.filter((c) => Boolean(c.whatsappOptOutAt)).length,
       },
+      dailyTrend: Array.from(trendMap.values()),
       recentCampaigns: userCampaigns.slice(0, 8),
       recentActivity: recentLogs,
     });
@@ -693,7 +741,8 @@ app.post('/api/groups', requireAuth, async (req: AuthRequest, res) => {
 app.delete('/api/groups/:id', requireAuth, async (req: AuthRequest, res) => {
   try {
     const dbUser = await resolveDbUser(req);
-    const id = Number(req.params.id);
+    const id = parsePositiveId(req.params.id);
+    if (!id) return res.status(400).json({ error: 'Invalid group ID' });
     await db
       .delete(contactGroups)
       .where(and(eq(contactGroups.id, id), eq(contactGroups.userId, dbUser.id)));
@@ -763,10 +812,53 @@ app.post('/api/contacts', requireAuth, async (req: AuthRequest, res) => {
   }
 });
 
+app.get('/api/contacts/:id/history', requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const dbUser = await resolveDbUser(req);
+    const id = parsePositiveId(req.params.id);
+    if (!id) return res.status(400).json({ error: 'Invalid contact ID' });
+
+    const [contactRow] = await db
+      .select({ id: contacts.id })
+      .from(contacts)
+      .where(and(eq(contacts.id, id), eq(contacts.userId, dbUser.id)))
+      .limit(1);
+
+    if (!contactRow) {
+      return res.status(404).json({ error: 'Contact not found' });
+    }
+
+    const rows = await db
+      .select({
+        id: campaignRecipients.id,
+        campaignId: campaigns.id,
+        campaignName: campaigns.name,
+        channel: campaigns.channel,
+        executionMode: campaigns.executionMode,
+        destination: campaignRecipients.destination,
+        status: campaignRecipients.status,
+        renderedBody: campaignRecipients.renderedBody,
+        providerMessageId: campaignRecipients.providerMessageId,
+        errorMessage: campaignRecipients.errorMessage,
+        updatedAt: campaignRecipients.updatedAt,
+      })
+      .from(campaignRecipients)
+      .innerJoin(campaigns, eq(campaignRecipients.campaignId, campaigns.id))
+      .where(and(eq(campaignRecipients.contactId, id), eq(campaigns.userId, dbUser.id)))
+      .orderBy(desc(campaignRecipients.updatedAt))
+      .limit(25);
+
+    res.json({ history: rows });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Failed to load contact outreach history' });
+  }
+});
+
 app.patch('/api/contacts/:id', requireAuth, async (req: AuthRequest, res) => {
   try {
     const dbUser = await resolveDbUser(req);
-    const id = Number(req.params.id);
+    const id = parsePositiveId(req.params.id);
+    if (!id) return res.status(400).json({ error: 'Invalid contact ID' });
     const {
       name,
       phone,
@@ -820,7 +912,8 @@ app.patch('/api/contacts/:id', requireAuth, async (req: AuthRequest, res) => {
 app.delete('/api/contacts/:id', requireAuth, async (req: AuthRequest, res) => {
   try {
     const dbUser = await resolveDbUser(req);
-    const id = Number(req.params.id);
+    const id = parsePositiveId(req.params.id);
+    if (!id) return res.status(400).json({ error: 'Invalid contact ID' });
     await db
       .delete(contacts)
       .where(and(eq(contacts.id, id), eq(contacts.userId, dbUser.id)));
@@ -913,6 +1006,7 @@ app.post('/api/contacts/bulk-action', requireAuth, async (req: AuthRequest, res)
       : [];
     const action = String(req.body.action || '');
     const groupId = req.body.groupId ? Number(req.body.groupId) : null;
+    const tag = req.body.tag ? String(req.body.tag).trim() : '';
 
     if (!ids.length) {
       return res.status(400).json({ error: 'Select at least one contact.' });
@@ -945,6 +1039,11 @@ app.post('/api/contacts/bulk-action', requireAuth, async (req: AuthRequest, res)
         .update(contacts)
         .set({ emailOptIn: false, emailUnsubscribedAt: new Date() })
         .where(and(eq(contacts.userId, dbUser.id), inArray(contacts.id, ids)));
+    } else if (action === 'unsuppress_email') {
+      await db
+        .update(contacts)
+        .set({ suppressedEmail: false, emailUnsubscribedAt: null })
+        .where(and(eq(contacts.userId, dbUser.id), inArray(contacts.id, ids)));
     } else if (action === 'add_group' && groupId) {
       const targetRows = await db
         .select()
@@ -955,6 +1054,18 @@ app.post('/api/contacts/bulk-action', requireAuth, async (req: AuthRequest, res)
         await db
           .update(contacts)
           .set({ groupIds: nextGroups })
+          .where(eq(contacts.id, row.id));
+      }
+    } else if (action === 'add_tag' && tag) {
+      const targetRows = await db
+        .select()
+        .from(contacts)
+        .where(and(eq(contacts.userId, dbUser.id), inArray(contacts.id, ids)));
+      for (const row of targetRows) {
+        const nextTags = Array.from(new Set([...(row.tags || []), tag]));
+        await db
+          .update(contacts)
+          .set({ tags: nextTags })
           .where(eq(contacts.id, row.id));
       }
     } else {
@@ -1066,7 +1177,8 @@ app.post('/api/templates', requireAuth, async (req: AuthRequest, res) => {
 app.patch('/api/templates/:id', requireAuth, async (req: AuthRequest, res) => {
   try {
     const dbUser = await resolveDbUser(req);
-    const id = Number(req.params.id);
+    const id = parsePositiveId(req.params.id);
+    if (!id) return res.status(400).json({ error: 'Invalid template ID' });
     const {
       name,
       templateCategory,
@@ -1104,7 +1216,8 @@ app.patch('/api/templates/:id', requireAuth, async (req: AuthRequest, res) => {
 app.delete('/api/templates/:id', requireAuth, async (req: AuthRequest, res) => {
   try {
     const dbUser = await resolveDbUser(req);
-    const id = Number(req.params.id);
+    const id = parsePositiveId(req.params.id);
+    if (!id) return res.status(400).json({ error: 'Invalid template ID' });
     await db
       .delete(templates)
       .where(and(eq(templates.id, id), eq(templates.userId, dbUser.id)));
@@ -1198,7 +1311,8 @@ app.get('/api/campaigns', requireAuth, async (req: AuthRequest, res) => {
 app.get('/api/campaigns/:id', requireAuth, async (req: AuthRequest, res) => {
   try {
     const dbUser = await resolveDbUser(req);
-    const id = Number(req.params.id);
+    const id = parsePositiveId(req.params.id);
+    if (!id) return res.status(400).json({ error: 'Invalid campaign ID' });
     const [campaign] = await db
       .select()
       .from(campaigns)
@@ -1380,7 +1494,8 @@ app.post('/api/campaigns', requireAuth, async (req: AuthRequest, res) => {
 app.post('/api/campaigns/:id/duplicate', requireAuth, async (req: AuthRequest, res) => {
   try {
     const dbUser = await resolveDbUser(req);
-    const id = Number(req.params.id);
+    const id = parsePositiveId(req.params.id);
+    if (!id) return res.status(400).json({ error: 'Invalid campaign ID' });
     const [orig] = await db
       .select()
       .from(campaigns)
@@ -1444,13 +1559,22 @@ app.post('/api/campaigns/:id/duplicate', requireAuth, async (req: AuthRequest, r
 app.post('/api/campaigns/:id/status', requireAuth, async (req: AuthRequest, res) => {
   try {
     const dbUser = await resolveDbUser(req);
-    const id = Number(req.params.id);
+    const id = parsePositiveId(req.params.id);
+    if (!id) return res.status(400).json({ error: 'Invalid campaign ID' });
     const nextStatus = req.body.status;
     if (!['paused', 'scheduled', 'cancelled', 'run_now'].includes(nextStatus)) {
       return res.status(400).json({ error: 'Invalid status transition' });
     }
 
     if (nextStatus === 'run_now') {
+      const [owned] = await db
+        .select({ id: campaigns.id })
+        .from(campaigns)
+        .where(and(eq(campaigns.id, id), eq(campaigns.userId, dbUser.id)))
+        .limit(1);
+      if (!owned) {
+        return res.status(404).json({ error: 'Campaign not found' });
+      }
       await executeCampaignById(id, getAppBaseUrl(req));
       const [updated] = await db
         .select()
@@ -1487,7 +1611,8 @@ app.post('/api/campaigns/:id/status', requireAuth, async (req: AuthRequest, res)
 app.post('/api/campaigns/:id/retry-failed', requireAuth, async (req: AuthRequest, res) => {
   try {
     const dbUser = await resolveDbUser(req);
-    const id = Number(req.params.id);
+    const id = parsePositiveId(req.params.id);
+    if (!id) return res.status(400).json({ error: 'Invalid campaign ID' });
     const [campaign] = await db
       .select()
       .from(campaigns)
@@ -1598,8 +1723,15 @@ async function startServer() {
     console.log(`ConnectFlow server listening on http://0.0.0.0:${PORT} (${process.env.NODE_ENV || 'development'})`);
   });
 
+  const schedulerBaseUrl = process.env.APP_URL || `http://127.0.0.1:${PORT}`;
+  const schedulerInterval = setInterval(() => {
+    void processAllDueScheduledCampaigns(schedulerBaseUrl);
+  }, 30000);
+  schedulerInterval.unref();
+
   const shutdown = (signal: string) => {
     console.log(`Received ${signal}, shutting down ConnectFlow server...`);
+    clearInterval(schedulerInterval);
     server.close(() => {
       void pool.end().finally(() => process.exit(0));
     });

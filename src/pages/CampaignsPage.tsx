@@ -13,10 +13,13 @@ import {
   Search,
   RotateCcw,
   Download,
+  ChevronDown,
+  ChevronRight,
 } from 'lucide-react';
 import { apiRequest } from '../lib/api';
 import { Campaign, CampaignRecipient } from '../types';
 import { useToast } from '../components/ToastContext';
+import { sanitizeEmailHtml } from '../lib/sanitize';
 
 type FilterTab = 'all' | 'whatsapp' | 'email' | 'completed' | 'failed' | 'scheduled';
 
@@ -32,6 +35,8 @@ export const CampaignsPage: React.FC = () => {
   const [detailRecipients, setDetailRecipients] = useState<CampaignRecipient[]>([]);
   const [detailLoading, setDetailLoading] = useState(false);
   const [recipientFilter, setRecipientFilter] = useState<'all' | 'delivered' | 'issues'>('all');
+  const [recipientSearch, setRecipientSearch] = useState('');
+  const [expandedRecipientId, setExpandedRecipientId] = useState<number | null>(null);
   const [retrying, setRetrying] = useState(false);
 
   const loadCampaigns = async () => {
@@ -79,6 +84,8 @@ export const CampaignsPage: React.FC = () => {
     setDetailCampaign(c);
     setDetailRecipients([]);
     setRecipientFilter('all');
+    setRecipientSearch('');
+    setExpandedRecipientId(null);
     setDetailOpen(true);
     setDetailLoading(true);
     try {
@@ -173,16 +180,30 @@ export const CampaignsPage: React.FC = () => {
   };
 
   const filteredDetailRecipients = useMemo(() => {
-    if (recipientFilter === 'delivered') {
-      return detailRecipients.filter(
-        (r) => r.status === 'delivered' || r.status === 'read' || r.status === 'sent'
-      );
-    }
-    if (recipientFilter === 'issues') {
-      return detailRecipients.filter((r) => r.status === 'failed' || r.status === 'bounced');
-    }
-    return detailRecipients;
-  }, [detailRecipients, recipientFilter]);
+    const q = recipientSearch.trim().toLowerCase();
+    return detailRecipients.filter((r) => {
+      if (
+        recipientFilter === 'delivered' &&
+        r.status !== 'delivered' &&
+        r.status !== 'read' &&
+        r.status !== 'sent'
+      ) {
+        return false;
+      }
+      if (recipientFilter === 'issues' && r.status !== 'failed' && r.status !== 'bounced') {
+        return false;
+      }
+      if (q) {
+        return (
+          r.contactName.toLowerCase().includes(q) ||
+          r.destination.toLowerCase().includes(q) ||
+          (r.errorMessage || '').toLowerCase().includes(q) ||
+          (r.providerMessageId || '').toLowerCase().includes(q)
+        );
+      }
+      return true;
+    });
+  }, [detailRecipients, recipientFilter, recipientSearch]);
 
   return (
     <div className="space-y-6">
@@ -610,29 +631,43 @@ export const CampaignsPage: React.FC = () => {
                 </div>
               </div>
 
-              <div className="flex items-center justify-between">
-                <p className="text-xs font-semibold text-slate-800">Recipient Logs</p>
-                <div className="inline-flex items-center gap-1 p-0.5 bg-slate-100 rounded-md">
-                  {(
-                    [
-                      ['all', 'All'],
-                      ['delivered', 'Delivered'],
-                      ['issues', 'Failed / Bounced'],
-                    ] as ['all' | 'delivered' | 'issues', string][]
-                  ).map(([k, label]) => (
-                    <button
-                      key={k}
-                      type="button"
-                      onClick={() => setRecipientFilter(k)}
-                      className={`px-2.5 py-1 text-[11px] font-medium rounded transition-colors ${
-                        recipientFilter === k
-                          ? 'bg-white text-slate-900 shadow-sm'
-                          : 'text-slate-600 hover:text-slate-900'
-                      }`}
-                    >
-                      {label}
-                    </button>
-                  ))}
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <p className="text-xs font-semibold text-slate-800">
+                  Recipient Logs <span className="text-slate-400 font-normal">(click row to inspect message)</span>
+                </p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="relative">
+                    <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      value={recipientSearch}
+                      onChange={(e) => setRecipientSearch(e.target.value)}
+                      placeholder="Filter recipients..."
+                      className="pl-7 pr-2.5 py-1 text-xs border border-slate-200 rounded-md bg-white focus:outline-none focus:border-blue-500 w-44"
+                    />
+                  </div>
+                  <div className="inline-flex items-center gap-1 p-0.5 bg-slate-100 rounded-md">
+                    {(
+                      [
+                        ['all', 'All'],
+                        ['delivered', 'Delivered'],
+                        ['issues', 'Failed / Bounced'],
+                      ] as ['all' | 'delivered' | 'issues', string][]
+                    ).map(([k, label]) => (
+                      <button
+                        key={k}
+                        type="button"
+                        onClick={() => setRecipientFilter(k)}
+                        className={`px-2.5 py-1 text-[11px] font-medium rounded transition-colors ${
+                          recipientFilter === k
+                            ? 'bg-white text-slate-900 shadow-sm'
+                            : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
 
@@ -660,33 +695,85 @@ export const CampaignsPage: React.FC = () => {
                         </td>
                       </tr>
                     ) : (
-                      filteredDetailRecipients.map((r) => (
-                        <tr key={r.id}>
-                          <td className="py-2.5 px-4 font-medium text-slate-800">
-                            {r.contactName}
-                          </td>
-                          <td className="py-2.5 px-4 font-mono text-slate-600">
-                            {r.destination}
-                          </td>
-                          <td className="py-2.5 px-4 font-semibold capitalize">
-                            <span
-                              className={
-                                r.status === 'delivered' || r.status === 'read' || r.status === 'sent'
-                                  ? 'text-emerald-700'
-                                  : r.status === 'failed' || r.status === 'bounced'
-                                    ? 'text-red-600'
-                                    : 'text-slate-600'
+                      filteredDetailRecipients.map((r) => {
+                        const isExpanded = expandedRecipientId === r.id;
+                        return (
+                          <React.Fragment key={r.id}>
+                            <tr
+                              onClick={() =>
+                                setExpandedRecipientId(isExpanded ? null : r.id)
                               }
+                              className="hover:bg-[#F8FAFC] cursor-pointer transition-colors"
                             >
-                              {r.status}
-                              {r.isSimulated ? ' (Demo)' : ''}
-                            </span>
-                          </td>
-                          <td className="py-2.5 px-4 text-slate-500 font-mono truncate max-w-[180px]">
-                            {r.errorMessage || r.providerMessageId || '—'}
-                          </td>
-                        </tr>
-                      ))
+                              <td className="py-2.5 px-4 font-medium text-slate-800">
+                                <span className="inline-flex items-center gap-1.5">
+                                  {isExpanded ? (
+                                    <ChevronDown className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                                  ) : (
+                                    <ChevronRight className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                                  )}
+                                  <span>{r.contactName}</span>
+                                </span>
+                              </td>
+                              <td className="py-2.5 px-4 font-mono text-slate-600">
+                                {r.destination}
+                              </td>
+                              <td className="py-2.5 px-4 font-semibold capitalize">
+                                <span
+                                  className={
+                                    r.status === 'delivered' || r.status === 'read' || r.status === 'sent'
+                                      ? 'text-emerald-700'
+                                      : r.status === 'failed' || r.status === 'bounced'
+                                        ? 'text-red-600'
+                                        : 'text-slate-600'
+                                  }
+                                >
+                                  {r.status}
+                                  {r.isSimulated ? ' (Demo)' : ''}
+                                </span>
+                              </td>
+                              <td className="py-2.5 px-4 text-slate-500 font-mono truncate max-w-[180px]">
+                                {r.errorMessage || r.providerMessageId || '—'}
+                              </td>
+                            </tr>
+                            {isExpanded && (
+                              <tr className="bg-[#F8FAFC]">
+                                <td colSpan={4} className="px-4 py-3.5 border-t border-slate-100">
+                                  <div className="space-y-2">
+                                    <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] font-mono text-slate-500">
+                                      <span>
+                                        ID: {r.providerMessageId || 'Not assigned'}
+                                      </span>
+                                      <span className="tabular-nums">
+                                        Updated {new Date(r.updatedAt).toLocaleString()}
+                                      </span>
+                                    </div>
+                                    {r.errorMessage && (
+                                      <p className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2 font-mono">
+                                        {r.errorMessage}
+                                      </p>
+                                    )}
+                                    <div className="p-3 bg-white border border-slate-200 rounded-md text-xs text-slate-700">
+                                      {detailCampaign.channel === 'email' ? (
+                                        <div
+                                          className="leading-relaxed space-y-1.5"
+                                          dangerouslySetInnerHTML={{
+                                            __html: sanitizeEmailHtml(r.renderedBody),
+                                          }}
+                                        />
+                                      ) : (
+                                        <p className="whitespace-pre-wrap leading-relaxed">
+                                          {r.renderedBody}
+                                        </p>
+                                      )}
+                                    </div>
+                                  </div>
+                                </td>
+                              </tr>
+                            )}
+                          </React.Fragment>
+                        );
+                      })
                     )}
                   </tbody>
                 </table>

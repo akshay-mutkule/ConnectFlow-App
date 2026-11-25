@@ -20,15 +20,19 @@ export const DashboardPage: React.FC<{
   const navigate = useNavigate();
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
   const [chartChannel, setChartChannel] = useState<'all' | 'whatsapp' | 'email'>('all');
+  const [chartMode, setChartMode] = useState<'campaigns' | 'daily'>('campaigns');
+  const [range, setRange] = useState<'7d' | '30d' | 'all'>('all');
 
   useEffect(() => {
     let active = true;
     (async () => {
+      if (data) setRefreshing(true);
       try {
-        const res = await apiRequest<DashboardData>('/api/dashboard');
+        const res = await apiRequest<DashboardData>(`/api/dashboard?range=${range}`);
         if (active) {
           setData(res);
           onStatsLoaded?.(res.stats);
@@ -36,13 +40,16 @@ export const DashboardPage: React.FC<{
       } catch (err: any) {
         if (active) setError(err.message || 'Failed to load dashboard');
       } finally {
-        if (active) setLoading(false);
+        if (active) {
+          setLoading(false);
+          setRefreshing(false);
+        }
       }
     })();
     return () => {
       active = false;
     };
-  }, [onStatsLoaded]);
+  }, [range, onStatsLoaded]);
 
   if (loading) {
     return (
@@ -84,8 +91,24 @@ export const DashboardPage: React.FC<{
   const chartCampaigns = [...data.recentCampaigns]
     .filter((c) => chartChannel === 'all' || c.channel === chartChannel)
     .reverse();
-  const maxTotal = Math.max(1, ...chartCampaigns.map((c) => Math.max(c.totalRecipients, c.sentCount)));
-  const midTick = Math.round(maxTotal / 2);
+  const maxCampaignTotal = Math.max(
+    1,
+    ...chartCampaigns.map((c) => Math.max(c.totalRecipients, c.sentCount))
+  );
+
+  const dailyPoints = (data.dailyTrend || []).map((pt) => {
+    const sent =
+      chartChannel === 'whatsapp'
+        ? pt.whatsappSent
+        : chartChannel === 'email'
+          ? pt.emailSent
+          : pt.whatsappSent + pt.emailSent;
+    const total = Math.max(sent, pt.delivered + pt.failed);
+    return { ...pt, total };
+  });
+  const maxDailyTotal = Math.max(1, ...dailyPoints.map((d) => d.total));
+  const activeMaxTotal = chartMode === 'campaigns' ? maxCampaignTotal : maxDailyTotal;
+  const midTick = Math.round(activeMaxTotal / 2);
 
   return (
     <div className="space-y-7">
@@ -101,23 +124,48 @@ export const DashboardPage: React.FC<{
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          <div className="inline-flex p-0.5 bg-slate-100 border border-slate-200 rounded-lg text-xs font-medium mr-1">
+            {(
+              [
+                ['7d', '7D'],
+                ['30d', '30D'],
+                ['all', 'All'],
+              ] as const
+            ).map(([val, label]) => (
+              <button
+                key={val}
+                type="button"
+                onClick={() => {
+                  setRange(val);
+                  setHoveredIdx(null);
+                }}
+                className={`px-2.5 py-1.5 rounded-md transition-colors whitespace-nowrap ${
+                  range === val
+                    ? 'bg-white text-slate-900 shadow-xs font-semibold'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
           <Link
             to="/whatsapp"
-            className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 shadow-xs transition-all whitespace-nowrap"
+            className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 shadow-xs transition-all whitespace-nowrap shrink-0"
           >
             <MessageSquare className="w-3.5 h-3.5" />
             <span>Send WhatsApp Message</span>
           </Link>
           <Link
             to="/email"
-            className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 shadow-xs transition-all whitespace-nowrap"
+            className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 shadow-xs transition-all whitespace-nowrap shrink-0"
           >
             <Mail className="w-3.5 h-3.5" />
             <span>Send Email</span>
           </Link>
           <Link
             to="/contacts"
-            className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 hover:border-slate-300 transition-all whitespace-nowrap"
+            className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 hover:border-slate-300 transition-all whitespace-nowrap shrink-0"
           >
             <Users className="w-3.5 h-3.5" />
             <span>Manage Contacts</span>
@@ -126,7 +174,11 @@ export const DashboardPage: React.FC<{
       </div>
 
       {/* Unified Architectural Metric Ledger Strip */}
-      <div className="bg-white border border-slate-200 rounded-xl grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 divide-y sm:divide-y-0 sm:divide-x divide-slate-200 overflow-hidden shadow-xs">
+      <div
+        className={`bg-white border border-slate-200 rounded-xl grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 divide-y sm:divide-y-0 sm:divide-x divide-slate-200 overflow-hidden shadow-xs transition-opacity ${
+          refreshing ? 'opacity-70' : 'opacity-100'
+        }`}
+      >
         <Link
           to="/contacts"
           className="p-5 hover:bg-[#F8FAFC] transition-colors group flex flex-col justify-between"
@@ -226,13 +278,45 @@ export const DashboardPage: React.FC<{
           <div className="flex flex-wrap items-center justify-between gap-4 mb-5">
             <div>
               <h3 className="font-display text-base font-semibold text-slate-900">
-                Campaign Delivery Breakdown
+                {chartMode === 'campaigns' ? 'Campaign Delivery Breakdown' : 'Daily Send Volume'}
               </h3>
               <p className="text-xs text-slate-500 mt-0.5">
-                Delivered vs. failed volume across your latest campaigns
+                {chartMode === 'campaigns'
+                  ? 'Delivered vs. failed volume across your latest campaigns'
+                  : `Daily WhatsApp & Email throughput over the last ${range === '7d' ? '7' : '14'} days`}
               </p>
             </div>
-            <div className="flex flex-wrap items-center gap-4">
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="inline-flex p-0.5 bg-slate-100 rounded-lg text-[11px] font-medium">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setChartMode('campaigns');
+                    setHoveredIdx(null);
+                  }}
+                  className={`px-2.5 py-1 rounded-md transition-colors whitespace-nowrap ${
+                    chartMode === 'campaigns'
+                      ? 'bg-white text-slate-900 shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  By Campaign
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setChartMode('daily');
+                    setHoveredIdx(null);
+                  }}
+                  className={`px-2.5 py-1 rounded-md transition-colors whitespace-nowrap ${
+                    chartMode === 'daily'
+                      ? 'bg-white text-slate-900 shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  Daily Trend
+                </button>
+              </div>
               <div className="inline-flex p-0.5 bg-slate-100 rounded-lg text-[11px] font-medium">
                 {(['all', 'whatsapp', 'email'] as const).map((ch) => (
                   <button
@@ -269,77 +353,160 @@ export const DashboardPage: React.FC<{
             </div>
           </div>
 
-          {chartCampaigns.length === 0 ? (
+          {chartMode === 'campaigns' ? (
+            chartCampaigns.length === 0 ? (
+              <div className="h-48 border border-dashed border-slate-200 rounded-lg bg-[#F8FAFC]/60 flex flex-col items-center justify-center text-center p-6">
+                <p className="text-xs font-semibold text-slate-700">
+                  {chartChannel === 'all'
+                    ? 'No campaign telemetry in this window'
+                    : `No ${chartChannel === 'whatsapp' ? 'WhatsApp' : 'Email'} campaigns recorded in this window`}
+                </p>
+                <p className="text-[11px] text-slate-500 mt-1 max-w-xs">
+                  Launch a campaign or expand the date range to visualize delivery performance.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <div className="relative h-48 flex">
+                  {/* Y-Axis Scale */}
+                  <div className="flex flex-col justify-between pr-3 py-1 text-[10px] font-mono text-slate-400 tabular-nums select-none text-right w-9 shrink-0">
+                    <span>{activeMaxTotal}</span>
+                    <span>{midTick}</span>
+                    <span>0</span>
+                  </div>
+
+                  {/* Plot Area with Hairline Grid */}
+                  <div className="relative flex-1 flex items-end gap-3 pt-4 border-b border-l border-slate-200 px-3">
+                    <div className="absolute inset-x-0 top-1 border-t border-dashed border-slate-100 pointer-events-none" />
+                    <div className="absolute inset-x-0 top-1/2 border-t border-dashed border-slate-100 pointer-events-none" />
+
+                    {chartCampaigns.map((c, idx) => {
+                      const delivered = Math.max(
+                        c.deliveredCount,
+                        c.sentCount - c.failedCount - c.bouncedCount
+                      );
+                      const failed = c.failedCount + c.bouncedCount;
+                      const total = Math.max(1, c.totalRecipients);
+                      const barHeightPct = Math.max(12, Math.round((total / activeMaxTotal) * 100));
+                      const failPct = Math.round((failed / total) * 100);
+                      const delivPct = Math.round((delivered / total) * 100);
+                      const isHovered = hoveredIdx === idx;
+                      const dimmed = hoveredIdx !== null && !isHovered;
+
+                      return (
+                        <div
+                          key={c.id}
+                          onMouseEnter={() => setHoveredIdx(idx)}
+                          onMouseLeave={() => setHoveredIdx(null)}
+                          onClick={() => navigate('/campaigns')}
+                          className={`flex-1 flex flex-col items-center justify-end h-full cursor-pointer group relative transition-opacity duration-150 ${
+                            dimmed ? 'opacity-45' : 'opacity-100'
+                          }`}
+                        >
+                          {isHovered && (
+                            <div className="absolute -top-2 -translate-y-full z-10 bg-slate-900 text-white text-[11px] rounded-lg px-3 py-2 whitespace-nowrap shadow-lg pointer-events-none">
+                              <p className="font-semibold font-display">{c.name}</p>
+                              <p className="font-mono text-slate-300 mt-0.5 tabular-nums">
+                                {delivered}/{total} delivered ({delivPct}%) · {failed} failed
+                              </p>
+                            </div>
+                          )}
+                          <div
+                            style={{ height: `${barHeightPct}%` }}
+                            className="w-full max-w-[44px] rounded-t-md overflow-hidden flex flex-col justify-end bg-slate-100 ring-1 ring-inset ring-slate-900/5"
+                          >
+                            {failPct > 0 && (
+                              <div style={{ height: `${failPct}%` }} className="w-full bg-red-500" />
+                            )}
+                            <div
+                              style={{ height: `${100 - failPct}%` }}
+                              className={`w-full ${
+                                c.channel === 'whatsapp' ? 'bg-emerald-600' : 'bg-blue-600'
+                              }`}
+                            />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3 pl-12 pr-3">
+                  {chartCampaigns.map((c) => (
+                    <p
+                      key={c.id}
+                      className="flex-1 text-center text-[11px] text-slate-500 truncate font-medium"
+                    >
+                      {c.name}
+                    </p>
+                  ))}
+                </div>
+              </div>
+            )
+          ) : dailyPoints.length === 0 || dailyPoints.every((d) => d.total === 0) ? (
             <div className="h-48 border border-dashed border-slate-200 rounded-lg bg-[#F8FAFC]/60 flex flex-col items-center justify-center text-center p-6">
-              <p className="text-xs font-semibold text-slate-700">
-                {chartChannel === 'all'
-                  ? 'No campaign telemetry yet'
-                  : `No ${chartChannel === 'whatsapp' ? 'WhatsApp' : 'Email'} campaigns recorded yet`}
-              </p>
+              <p className="text-xs font-semibold text-slate-700">No daily send volume yet</p>
               <p className="text-[11px] text-slate-500 mt-1 max-w-xs">
-                Launch a campaign to visualize per-run delivery performance here.
+                Daily WhatsApp and Email volume will plot chronologically as campaigns run.
               </p>
             </div>
           ) : (
             <div className="space-y-3">
               <div className="relative h-48 flex">
-                {/* Y-Axis Scale */}
                 <div className="flex flex-col justify-between pr-3 py-1 text-[10px] font-mono text-slate-400 tabular-nums select-none text-right w-9 shrink-0">
-                  <span>{maxTotal}</span>
+                  <span>{activeMaxTotal}</span>
                   <span>{midTick}</span>
                   <span>0</span>
                 </div>
 
-                {/* Plot Area with Hairline Grid */}
-                <div className="relative flex-1 flex items-end gap-3 pt-4 border-b border-l border-slate-200 px-3">
-                  {/* Horizontal dashed gridlines */}
+                <div className="relative flex-1 flex items-end gap-2 pt-4 border-b border-l border-slate-200 px-2.5">
                   <div className="absolute inset-x-0 top-1 border-t border-dashed border-slate-100 pointer-events-none" />
                   <div className="absolute inset-x-0 top-1/2 border-t border-dashed border-slate-100 pointer-events-none" />
 
-                  {chartCampaigns.map((c, idx) => {
-                    const delivered = Math.max(
-                      c.deliveredCount,
-                      c.sentCount - c.failedCount - c.bouncedCount
-                    );
-                    const failed = c.failedCount + c.bouncedCount;
-                    const total = Math.max(1, c.totalRecipients);
-                    const barHeightPct = Math.max(12, Math.round((total / maxTotal) * 100));
-                    const failPct = Math.round((failed / total) * 100);
-                    const delivPct = Math.round((delivered / total) * 100);
+                  {dailyPoints.map((pt, idx) => {
+                    const waPart = chartChannel === 'email' ? 0 : pt.whatsappSent;
+                    const emailPart = chartChannel === 'whatsapp' ? 0 : pt.emailSent;
+                    const denom = Math.max(1, waPart + emailPart);
+                    const barHeightPct =
+                      pt.total > 0 ? Math.max(8, Math.round((pt.total / activeMaxTotal) * 100)) : 3;
+                    const waShare = Math.round((waPart / denom) * 100);
+                    const emailShare = 100 - waShare;
                     const isHovered = hoveredIdx === idx;
                     const dimmed = hoveredIdx !== null && !isHovered;
 
                     return (
                       <div
-                        key={c.id}
+                        key={pt.date}
                         onMouseEnter={() => setHoveredIdx(idx)}
                         onMouseLeave={() => setHoveredIdx(null)}
-                        onClick={() => navigate('/campaigns')}
-                        className={`flex-1 flex flex-col items-center justify-end h-full cursor-pointer group relative transition-opacity duration-150 ${
+                        className={`flex-1 flex flex-col items-center justify-end h-full relative transition-opacity duration-150 ${
                           dimmed ? 'opacity-45' : 'opacity-100'
                         }`}
                       >
                         {isHovered && (
                           <div className="absolute -top-2 -translate-y-full z-10 bg-slate-900 text-white text-[11px] rounded-lg px-3 py-2 whitespace-nowrap shadow-lg pointer-events-none">
-                            <p className="font-semibold font-display">{c.name}</p>
+                            <p className="font-semibold font-display">{pt.label}</p>
                             <p className="font-mono text-slate-300 mt-0.5 tabular-nums">
-                              {delivered}/{total} delivered ({delivPct}%) · {failed} failed
+                              {waPart} WA · {emailPart} Email · {pt.failed} failed
                             </p>
                           </div>
                         )}
                         <div
                           style={{ height: `${barHeightPct}%` }}
-                          className="w-full max-w-[44px] rounded-t-md overflow-hidden flex flex-col justify-end bg-slate-100 ring-1 ring-inset ring-slate-900/5"
+                          className={`w-full max-w-[32px] rounded-t-md overflow-hidden flex flex-col justify-end ${
+                            pt.total === 0 ? 'bg-slate-200/70' : 'bg-slate-100 ring-1 ring-inset ring-slate-900/5'
+                          }`}
                         >
-                          {failPct > 0 && (
-                            <div style={{ height: `${failPct}%` }} className="w-full bg-red-500" />
+                          {pt.total > 0 && (
+                            <>
+                              {emailPart > 0 && (
+                                <div style={{ height: `${emailShare}%` }} className="w-full bg-blue-600" />
+                              )}
+                              {waPart > 0 && (
+                                <div style={{ height: `${waShare}%` }} className="w-full bg-emerald-600" />
+                              )}
+                            </>
                           )}
-                          <div
-                            style={{ height: `${100 - failPct}%` }}
-                            className={`w-full ${
-                              c.channel === 'whatsapp' ? 'bg-emerald-600' : 'bg-blue-600'
-                            }`}
-                          />
                         </div>
                       </div>
                     );
@@ -347,13 +514,13 @@ export const DashboardPage: React.FC<{
                 </div>
               </div>
 
-              <div className="flex items-center gap-3 pl-12 pr-3">
-                {chartCampaigns.map((c) => (
+              <div className="flex items-center gap-2 pl-11 pr-2.5">
+                {dailyPoints.map((pt, idx) => (
                   <p
-                    key={c.id}
-                    className="flex-1 text-center text-[11px] text-slate-500 truncate font-medium"
+                    key={pt.date}
+                    className="flex-1 text-center text-[10px] font-mono text-slate-400 truncate tabular-nums"
                   >
-                    {c.name}
+                    {dailyPoints.length <= 7 || idx % 2 === 0 ? pt.label : ''}
                   </p>
                 ))}
               </div>

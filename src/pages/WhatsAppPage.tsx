@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import {
   MessageSquare,
@@ -13,6 +13,10 @@ import {
   ShieldCheck,
   ChevronLeft,
   ChevronRight,
+  Bold,
+  Italic,
+  Strikethrough,
+  Code,
 } from 'lucide-react';
 import { apiRequest } from '../lib/api';
 import { Campaign, Contact, ContactGroup, Template } from '../types';
@@ -20,11 +24,58 @@ import { useAuth } from '../context/AuthContext';
 import { useToast } from '../components/ToastContext';
 import { ConnectWhatsAppModal } from '../components/ConnectWhatsAppModal';
 
+function renderWhatsAppLine(line: string, lineKey: number): React.ReactNode[] {
+  const tokenRegex = /(\*[^*\n]+\*|_[^_\n]+_|~[^~\n]+~|`[^`\n]+`)/g;
+  const parts: React.ReactNode[] = [];
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+  let idx = 0;
+  while ((match = tokenRegex.exec(line)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push(line.slice(lastIndex, match.index));
+    }
+    const token = match[0];
+    const inner = token.slice(1, -1);
+    if (token.startsWith('*')) {
+      parts.push(<strong key={`${lineKey}-${idx++}`}>{inner}</strong>);
+    } else if (token.startsWith('_')) {
+      parts.push(<em key={`${lineKey}-${idx++}`}>{inner}</em>);
+    } else if (token.startsWith('~')) {
+      parts.push(<del key={`${lineKey}-${idx++}`}>{inner}</del>);
+    } else if (token.startsWith('`')) {
+      parts.push(
+        <code
+          key={`${lineKey}-${idx++}`}
+          className="px-1 py-0.5 rounded bg-black/5 font-mono text-[11px]"
+        >
+          {inner}
+        </code>
+      );
+    }
+    lastIndex = match.index + token.length;
+  }
+  if (lastIndex < line.length) {
+    parts.push(line.slice(lastIndex));
+  }
+  return parts;
+}
+
+function renderWhatsAppFormatted(text: string): React.ReactNode {
+  const lines = text.split('\n');
+  return lines.map((line, i) => (
+    <React.Fragment key={i}>
+      {renderWhatsAppLine(line, i)}
+      {i < lines.length - 1 && <br />}
+    </React.Fragment>
+  ));
+}
+
 export const WhatsAppPage: React.FC = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const { integrations } = useAuth();
+  const { integrations, profile } = useAuth();
   const { showToast } = useToast();
+  const bodyRef = useRef<HTMLTextAreaElement | null>(null);
 
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [groups, setGroups] = useState<ContactGroup[]>([]);
@@ -146,6 +197,23 @@ export const WhatsAppPage: React.FC = () => {
   const approvedTemplates = templates.filter((t) => t.templateCategory === 'whatsapp_approved');
   const draftTemplates = templates.filter((t) => t.templateCategory !== 'whatsapp_approved');
 
+  const applyWhatsAppFormat = (marker: '*' | '_' | '~' | '`') => {
+    const el = bodyRef.current;
+    if (!el) {
+      setBody((prev) => `${prev}${marker}text${marker}`);
+      return;
+    }
+    const start = el.selectionStart;
+    const end = el.selectionEnd;
+    const selected = body.slice(start, end) || 'text';
+    const next = `${body.slice(0, start)}${marker}${selected}${marker}${body.slice(end)}`;
+    setBody(next);
+    requestAnimationFrame(() => {
+      el.focus();
+      el.setSelectionRange(start + 1, start + 1 + selected.length);
+    });
+  };
+
   const handleSelectTemplate = (id: string) => {
     setSelectedTemplateId(id);
     const found = templates.find((t) => String(t.id) === id);
@@ -153,6 +221,14 @@ export const WhatsAppPage: React.FC = () => {
       setBody(found.body);
     }
   };
+
+  const dailyLimit = profile?.dailySendLimit || 500;
+  const overQuota = recipientSet.length > dailyLimit;
+  const usesNameVar = /\{\{\s*name\s*\}\}/i.test(body);
+  const usesPhoneVar = /\{\{\s*phone\s*\}\}/i.test(body);
+  const missingVarContacts = recipientSet.filter(
+    (c) => (usesNameVar && !c.name.trim()) || (usesPhoneVar && !c.phone)
+  ).length;
 
   const handleSaveAsDraft = async () => {
     if (!body.trim()) return;
@@ -355,9 +431,43 @@ export const WhatsAppPage: React.FC = () => {
             {/* Message Composer */}
             <div>
               <div className="flex flex-wrap items-center justify-between gap-2 mb-1.5">
-                <label className="text-xs font-medium text-slate-700">
-                  Message Content *
-                </label>
+                <div className="flex items-center gap-1.5">
+                  <label className="text-xs font-medium text-slate-700 mr-1">
+                    Message Content *
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => applyWhatsAppFormat('*')}
+                    className="p-1 border border-slate-200 rounded hover:bg-slate-50 text-slate-700"
+                    title="Bold (*text*)"
+                  >
+                    <Bold className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => applyWhatsAppFormat('_')}
+                    className="p-1 border border-slate-200 rounded hover:bg-slate-50 text-slate-700"
+                    title="Italic (_text_)"
+                  >
+                    <Italic className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => applyWhatsAppFormat('~')}
+                    className="p-1 border border-slate-200 rounded hover:bg-slate-50 text-slate-700"
+                    title="Strikethrough (~text~)"
+                  >
+                    <Strikethrough className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => applyWhatsAppFormat('`')}
+                    className="p-1 border border-slate-200 rounded hover:bg-slate-50 text-slate-700"
+                    title="Monospace (`text`)"
+                  >
+                    <Code className="w-3.5 h-3.5" />
+                  </button>
+                </div>
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
@@ -385,15 +495,26 @@ export const WhatsAppPage: React.FC = () => {
                 </div>
               </div>
               <textarea
+                ref={bodyRef}
                 rows={6}
                 required
                 value={body}
                 onChange={(e) => setBody(e.target.value)}
                 className="w-full px-3.5 py-2.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-600/20 focus:border-emerald-600 leading-relaxed"
               />
-              <div className="flex items-center justify-between text-xs text-slate-500 mt-1.5">
+              <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500 mt-1.5">
                 <span>Approved Meta templates apply outside 24h customer service windows.</span>
-                <span className="font-mono tabular-nums">{body.length} chars</span>
+                <span
+                  className={`font-mono tabular-nums ${
+                    body.length > 4096
+                      ? 'text-red-600 font-semibold'
+                      : body.length > 1024
+                        ? 'text-amber-700'
+                        : 'text-slate-500'
+                  }`}
+                >
+                  {body.length} / 4096 chars
+                </span>
               </div>
             </div>
 
@@ -557,6 +678,27 @@ export const WhatsAppPage: React.FC = () => {
               </div>
             </div>
 
+            {/* Pre-Flight Quota & Variable Coverage */}
+            <div className="p-3 rounded-lg bg-[#F8FAFC] border border-slate-200 flex flex-wrap items-center justify-between gap-2 text-xs">
+              <div className="flex items-center gap-2">
+                <span className="text-slate-600">Daily Limit Check:</span>
+                <span
+                  className={`font-mono font-semibold tabular-nums ${
+                    overQuota ? 'text-red-600' : 'text-emerald-700'
+                  }`}
+                >
+                  {recipientSet.length} / {dailyLimit} recipients
+                </span>
+              </div>
+              {missingVarContacts > 0 ? (
+                <span className="text-amber-700 font-medium">
+                  {missingVarContacts} recipient(s) missing a variable field (fallback used)
+                </span>
+              ) : (
+                <span className="text-slate-500 font-mono">Variables verified</span>
+              )}
+            </div>
+
             {/* Scheduling & Primary CTA */}
             <div className="pt-4 border-t border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div className="flex flex-wrap items-center gap-3">
@@ -582,7 +724,8 @@ export const WhatsAppPage: React.FC = () => {
 
               <button
                 type="submit"
-                className="inline-flex items-center justify-center gap-2 px-5 py-2.5 text-xs font-semibold text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 transition-colors whitespace-nowrap"
+                disabled={overQuota}
+                className="inline-flex items-center justify-center gap-2 px-5 py-2.5 text-xs font-semibold text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 disabled:opacity-50 transition-colors whitespace-nowrap"
               >
                 <Send className="w-3.5 h-3.5" />
                 <span>Review &amp; Send ({recipientSet.length})</span>
@@ -657,9 +800,11 @@ export const WhatsAppPage: React.FC = () => {
                 </div>
 
                 <div className="mt-6 bg-[#D9FDD3] rounded-xl rounded-tr-xs p-3 shadow-xs self-end max-w-[90%] border border-emerald-200/60">
-                  <p className="text-xs text-slate-900 whitespace-pre-wrap leading-relaxed">
-                    {previewText || 'Your WhatsApp message preview will appear here...'}
-                  </p>
+                  <div className="text-xs text-slate-900 leading-relaxed break-words">
+                    {previewText
+                      ? renderWhatsAppFormatted(previewText)
+                      : 'Your WhatsApp message preview will appear here...'}
+                  </div>
                   <p className="text-[10px] text-slate-500 text-right mt-1 font-mono">
                     10:42 AM · ✓✓
                   </p>

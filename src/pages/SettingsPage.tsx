@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   User,
   MessageSquare,
@@ -10,6 +10,8 @@ import {
   Copy,
   Check,
   Activity,
+  Search,
+  Download,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { apiRequest } from '../lib/api';
@@ -33,6 +35,8 @@ export const SettingsPage: React.FC = () => {
   const [waModalOpen, setWaModalOpen] = useState(false);
   const [emailModalOpen, setEmailModalOpen] = useState(false);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
+  const [auditSearch, setAuditSearch] = useState('');
+  const [auditChannelFilter, setAuditChannelFilter] = useState<'all' | 'whatsapp' | 'email' | 'system'>('all');
   const [testingChannel, setTestingChannel] = useState<'whatsapp' | 'email' | null>(null);
   const [testResults, setTestResults] = useState<{
     whatsapp?: { ok: boolean; mode: string; message: string };
@@ -143,6 +147,40 @@ export const SettingsPage: React.FC = () => {
     } catch {
       showToast('Copy failed', 'Unable to copy to clipboard', 'error');
     }
+  };
+
+  const filteredAuditLogs = useMemo(() => {
+    const q = auditSearch.trim().toLowerCase();
+    return auditLogs.filter((log) => {
+      if (auditChannelFilter === 'whatsapp' && log.channel !== 'whatsapp') return false;
+      if (auditChannelFilter === 'email' && log.channel !== 'email') return false;
+      if (auditChannelFilter === 'system' && Boolean(log.channel)) return false;
+      if (q) {
+        return (
+          log.details.toLowerCase().includes(q) ||
+          log.action.toLowerCase().includes(q) ||
+          (log.channel || '').toLowerCase().includes(q)
+        );
+      }
+      return true;
+    });
+  }, [auditLogs, auditSearch, auditChannelFilter]);
+
+  const handleExportAuditCsv = () => {
+    if (!filteredAuditLogs.length) return;
+    const esc = (v: string) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+    const header = ['timestamp', 'channel', 'action', 'details'].join(',');
+    const rows = filteredAuditLogs.map((log) =>
+      [esc(log.createdAt), esc(log.channel || 'system'), esc(log.action), esc(log.details)].join(',')
+    );
+    const blob = new Blob([[header, ...rows].join('\n')], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `connectflow_audit_log_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast('Audit log exported', `${filteredAuditLogs.length} event(s) saved to CSV.`, 'success');
   };
 
   return (
@@ -443,28 +481,90 @@ export const SettingsPage: React.FC = () => {
 
       {/* Security & Audit Log */}
       <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
-        <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
+        <div className="px-6 py-4 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <Shield className="w-4 h-4 text-slate-600" />
             <h3 className="font-display text-sm font-semibold text-slate-900">
               Security &amp; Campaign Audit Ledger
             </h3>
+            <span className="text-[11px] font-mono text-slate-400 tabular-nums">
+              · {filteredAuditLogs.length} events
+            </span>
           </div>
-          <span className="text-[11px] font-mono text-slate-400">
-            {auditLogs.length} recent events
-          </span>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="relative">
+              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                value={auditSearch}
+                onChange={(e) => setAuditSearch(e.target.value)}
+                placeholder="Search audit events..."
+                className="pl-7 pr-2.5 py-1.5 text-xs border border-slate-200 rounded-lg bg-white focus:outline-none focus:border-blue-500 w-44"
+              />
+            </div>
+
+            <div className="inline-flex p-0.5 bg-slate-100 rounded-lg text-[11px] font-medium">
+              {(
+                [
+                  ['all', 'All'],
+                  ['whatsapp', 'WhatsApp'],
+                  ['email', 'Email'],
+                  ['system', 'System'],
+                ] as const
+              ).map(([k, label]) => (
+                <button
+                  key={k}
+                  type="button"
+                  onClick={() => setAuditChannelFilter(k)}
+                  className={`px-2 py-1 rounded-md transition-colors whitespace-nowrap ${
+                    auditChannelFilter === k
+                      ? 'bg-white text-slate-900 shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            <button
+              type="button"
+              disabled={filteredAuditLogs.length === 0}
+              onClick={handleExportAuditCsv}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-40 transition-colors whitespace-nowrap"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span>Export CSV</span>
+            </button>
+          </div>
         </div>
 
-        <div className="max-h-60 overflow-y-auto divide-y divide-slate-100">
-          {auditLogs.length === 0 ? (
-            <p className="text-xs text-slate-500 py-8 text-center">No audit events recorded yet.</p>
+        <div className="max-h-64 overflow-y-auto divide-y divide-slate-100">
+          {filteredAuditLogs.length === 0 ? (
+            <p className="text-xs text-slate-500 py-8 text-center">
+              No audit events match your filters.
+            </p>
           ) : (
-            auditLogs.map((log) => (
+            filteredAuditLogs.map((log) => (
               <div
                 key={log.id}
                 className="px-6 py-3 flex items-start justify-between gap-4 text-xs hover:bg-[#F8FAFC] transition-colors"
               >
-                <span className="text-slate-700">{log.details}</span>
+                <div className="min-w-0 flex-1 flex items-center gap-2.5">
+                  <span
+                    className={`text-[11px] font-mono font-semibold shrink-0 w-16 ${
+                      log.channel === 'whatsapp'
+                        ? 'text-emerald-700'
+                        : log.channel === 'email'
+                          ? 'text-blue-600'
+                          : 'text-slate-400'
+                    }`}
+                  >
+                    {log.channel ? log.channel.toUpperCase() : 'SYSTEM'}
+                  </span>
+                  <span className="text-slate-700">{log.details}</span>
+                </div>
                 <span className="text-slate-400 font-mono whitespace-nowrap tabular-nums">
                   {new Date(log.createdAt).toLocaleString()}
                 </span>

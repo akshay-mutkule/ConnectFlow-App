@@ -115,7 +115,31 @@ export interface AuditLog {
   createdAt: string;
 }
 
+export interface DailyTrendPoint {
+  date: string;
+  label: string;
+  whatsappSent: number;
+  emailSent: number;
+  delivered: number;
+  failed: number;
+}
+
+export interface ContactHistoryItem {
+  id: number;
+  campaignId: number;
+  campaignName: string;
+  channel: 'whatsapp' | 'email';
+  executionMode: 'live' | 'demo';
+  destination: string;
+  status: 'queued' | 'sent' | 'delivered' | 'read' | 'bounced' | 'failed';
+  renderedBody: string;
+  providerMessageId: string | null;
+  errorMessage: string | null;
+  updatedAt: string;
+}
+
 export interface DashboardData {
+  range?: '7d' | '30d' | 'all';
   stats: {
     totalContacts: number;
     whatsappOptedIn: number;
@@ -132,6 +156,7 @@ export interface DashboardData {
     suppressedCount: number;
     whatsappOptOutCount: number;
   };
+  dailyTrend?: DailyTrendPoint[];
   recentCampaigns: Campaign[];
   recentActivity: AuditLog[];
 }

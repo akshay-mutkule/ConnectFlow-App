@@ -18,6 +18,7 @@ import {
   Smartphone,
   ChevronLeft,
   ChevronRight,
+  MousePointerClick,
 } from 'lucide-react';
 import { apiRequest } from '../lib/api';
 import { Campaign, Contact, ContactGroup, Template } from '../types';
@@ -29,7 +30,7 @@ import { sanitizeEmailHtml } from '../lib/sanitize';
 export const EmailPage: React.FC = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const { integrations } = useAuth();
+  const { integrations, profile } = useAuth();
   const { showToast } = useToast();
 
   const [contacts, setContacts] = useState<Contact[]>([]);
@@ -228,6 +229,25 @@ export const EmailPage: React.FC = () => {
       setBody((p) => `${p}${token}`);
     }
   };
+
+  const insertCtaButton = () => {
+    const buttonMarkup =
+      '<p style="margin:16px 0;"><a href="https://example.com" style="display:inline-block;background-color:#2563eb;color:#ffffff;padding:10px 20px;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px;">View Details</a></p>';
+    const next = sanitizeEmailHtml(`${body}${buttonMarkup}`);
+    setBody(next);
+    if (editorMode === 'visual' && visualRef.current) {
+      visualRef.current.innerHTML = next;
+    }
+    showToast('CTA button inserted', 'Switch to HTML or edit the link label directly.', 'info');
+  };
+
+  const dailyLimit = profile?.dailySendLimit || 500;
+  const overQuota = recipientSet.length > dailyLimit;
+  const usesNameVar = /\{\{\s*name\s*\}\}/i.test(`${subject} ${body}`);
+  const usesEmailVar = /\{\{\s*email\s*\}\}/i.test(`${subject} ${body}`);
+  const missingVarContacts = recipientSet.filter(
+    (c) => (usesNameVar && !c.name.trim()) || (usesEmailVar && !c.email)
+  ).length;
 
   const handleSelectTemplate = (id: string) => {
     setSelectedTemplateId(id);
@@ -564,6 +584,15 @@ export const EmailPage: React.FC = () => {
                   </button>
                   <button
                     type="button"
+                    onClick={insertCtaButton}
+                    className="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded hover:bg-blue-100"
+                    title="Insert Call-to-Action Button"
+                  >
+                    <MousePointerClick className="w-3 h-3" />
+                    <span>CTA Button</span>
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => insertToken(' {{name}}')}
                     className="px-2 py-1 text-[11px] font-mono text-blue-700 bg-blue-50 border border-blue-200 rounded hover:bg-blue-100"
                   >
@@ -752,6 +781,27 @@ export const EmailPage: React.FC = () => {
               </div>
             </div>
 
+            {/* Pre-Flight Quota & Variable Coverage */}
+            <div className="p-3 rounded-lg bg-[#F8FAFC] border border-slate-200 flex flex-wrap items-center justify-between gap-2 text-xs">
+              <div className="flex items-center gap-2">
+                <span className="text-slate-600">Daily Limit Check:</span>
+                <span
+                  className={`font-mono font-semibold tabular-nums ${
+                    overQuota ? 'text-red-600' : 'text-blue-600'
+                  }`}
+                >
+                  {recipientSet.length} / {dailyLimit} recipients
+                </span>
+              </div>
+              {missingVarContacts > 0 ? (
+                <span className="text-amber-700 font-medium">
+                  {missingVarContacts} recipient(s) missing a variable field (fallback used)
+                </span>
+              ) : (
+                <span className="text-slate-500 font-mono">Variables verified</span>
+              )}
+            </div>
+
             {/* Schedule & Send Email */}
             <div className="pt-4 border-t border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div className="flex flex-wrap items-center gap-3">
@@ -777,7 +827,8 @@ export const EmailPage: React.FC = () => {
 
               <button
                 type="submit"
-                className="inline-flex items-center justify-center gap-2 px-5 py-2.5 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors whitespace-nowrap"
+                disabled={overQuota}
+                className="inline-flex items-center justify-center gap-2 px-5 py-2.5 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors whitespace-nowrap"
               >
                 <Send className="w-3.5 h-3.5" />
                 <span>Send Email ({recipientSet.length})</span>
