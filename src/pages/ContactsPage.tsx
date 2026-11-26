@@ -672,8 +672,8 @@ export const ContactsPage: React.FC = () => {
             </div>
 
             {selectedIds.length > 0 && (
-              <div className="flex flex-wrap items-center gap-1.5 bg-white border border-slate-200 rounded-lg px-3 py-1.5 shadow-sm">
-                <span className="font-mono font-semibold text-slate-800 tabular-nums mr-1">
+              <div className="flex flex-wrap items-center gap-2 bg-[#F8FAFC] border border-slate-200 rounded-lg px-3 py-1.5">
+                <span className="font-mono font-semibold text-slate-800 tabular-nums">
                   {selectedIds.length} selected
                 </span>
                 <select
@@ -685,7 +685,7 @@ export const ContactsPage: React.FC = () => {
                       setBulkGroupId('');
                     }
                   }}
-                  className="text-xs border border-slate-200 rounded px-2 py-1 bg-slate-50 text-slate-700"
+                  className="text-xs border border-slate-200 rounded px-2 py-1 bg-white text-slate-700"
                 >
                   <option value="">Add to group...</option>
                   {groups.map((g) => (
@@ -694,7 +694,7 @@ export const ContactsPage: React.FC = () => {
                     </option>
                   ))}
                 </select>
-                <div className="inline-flex items-center border border-slate-200 rounded bg-slate-50 overflow-hidden">
+                <div className="inline-flex items-center border border-slate-200 rounded bg-white overflow-hidden">
                   <Tag className="w-3 h-3 text-slate-400 ml-2 shrink-0" />
                   <input
                     type="text"
@@ -723,34 +723,26 @@ export const ContactsPage: React.FC = () => {
                     </button>
                   )}
                 </div>
-                <button
-                  type="button"
-                  onClick={() => runBulkAction('whatsapp_opt_in')}
-                  className="px-2 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-50 rounded whitespace-nowrap"
+                <select
+                  value=""
+                  onChange={(e) => {
+                    const val = e.target.value as
+                      | 'whatsapp_opt_in'
+                      | 'whatsapp_opt_out'
+                      | 'email_opt_in'
+                      | 'email_opt_out'
+                      | '';
+                    if (val) void runBulkAction(val);
+                  }}
+                  aria-label="Bulk consent action"
+                  className="text-xs border border-slate-200 rounded px-2 py-1 bg-white text-slate-700"
                 >
-                  Enable WA
-                </button>
-                <button
-                  type="button"
-                  onClick={() => runBulkAction('whatsapp_opt_out')}
-                  className="px-2 py-1 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded whitespace-nowrap"
-                >
-                  Disable WA
-                </button>
-                <button
-                  type="button"
-                  onClick={() => runBulkAction('email_opt_in')}
-                  className="px-2 py-1 text-xs font-medium text-blue-600 hover:bg-blue-50 rounded whitespace-nowrap"
-                >
-                  Enable Email
-                </button>
-                <button
-                  type="button"
-                  onClick={() => runBulkAction('email_opt_out')}
-                  className="px-2 py-1 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded whitespace-nowrap"
-                >
-                  Disable Email
-                </button>
+                  <option value="">Consent...</option>
+                  <option value="whatsapp_opt_in">Enable WhatsApp Opt-In</option>
+                  <option value="whatsapp_opt_out">Disable WhatsApp Opt-In</option>
+                  <option value="email_opt_in">Enable Email Opt-In</option>
+                  <option value="email_opt_out">Disable Email Opt-In</option>
+                </select>
                 <button
                   type="button"
                   onClick={() => runBulkAction('delete')}

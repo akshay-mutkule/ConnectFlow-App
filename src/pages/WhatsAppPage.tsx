@@ -342,28 +342,28 @@ export const WhatsAppPage: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Connection Status Header */}
-      <div className="bg-white border border-slate-200 rounded-xl p-4 sm:px-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div className="flex items-start sm:items-center gap-3">
-          <div className="w-10 h-10 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
-            <MessageSquare className="w-5 h-5" />
+      <div className="bg-[#F8FAFC] border border-slate-200 rounded-xl px-5 py-3.5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+            <MessageSquare className="w-4 h-4" />
           </div>
           <div>
-            <div className="flex items-center gap-2">
-              <h2 className="font-display text-base font-semibold text-slate-900">
-                WhatsApp Business Platform API
+            <div className="flex items-center gap-2 flex-wrap">
+              <h2 className="text-sm font-semibold text-[#1E293B]">
+                WhatsApp Business API
               </h2>
               <span
-                className={`text-xs font-semibold ${
+                className={`text-xs font-medium ${
                   isLive ? 'text-emerald-700' : 'text-amber-700'
                 }`}
               >
-                {isLive ? '· Live Connected' : '· Demo Mode (Simulated)'}
+                {isLive ? '· Live Connected' : '· Demo Mode'}
               </span>
             </div>
             <p className="text-xs text-slate-500 mt-0.5">
               {isLive
-                ? `Active Phone ID ${integrations?.whatsappPhoneNumberId} (${integrations?.whatsappDisplayPhone || 'Verified Number'})`
-                : 'No Meta Cloud API token active. Messages run in simulated Demo Mode until credentials are connected.'}
+                ? `Phone ID ${integrations?.whatsappPhoneNumberId} (${integrations?.whatsappDisplayPhone || 'Verified'})`
+                : 'Messages run in simulated Demo Mode until Meta Cloud API credentials are connected.'}
             </p>
           </div>
         </div>
@@ -371,10 +371,10 @@ export const WhatsAppPage: React.FC = () => {
         <button
           type="button"
           onClick={() => setConnectModalOpen(true)}
-          className="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 whitespace-nowrap shrink-0"
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 whitespace-nowrap shrink-0"
         >
           <Settings2 className="w-3.5 h-3.5" />
-          <span>{isLive ? 'Manage API' : 'Connect WhatsApp API'}</span>
+          <span>{isLive ? 'Configure' : 'Connect API'}</span>
         </button>
       </div>
 
@@ -678,26 +678,21 @@ export const WhatsAppPage: React.FC = () => {
               </div>
             </div>
 
-            {/* Pre-Flight Quota & Variable Coverage */}
-            <div className="p-3 rounded-lg bg-[#F8FAFC] border border-slate-200 flex flex-wrap items-center justify-between gap-2 text-xs">
-              <div className="flex items-center gap-2">
-                <span className="text-slate-600">Daily Limit Check:</span>
-                <span
-                  className={`font-mono font-semibold tabular-nums ${
-                    overQuota ? 'text-red-600' : 'text-emerald-700'
-                  }`}
-                >
-                  {recipientSet.length} / {dailyLimit} recipients
-                </span>
+            {/* Pre-Flight Guardrail (shown only when quota exceeded or variables missing) */}
+            {(overQuota || missingVarContacts > 0) && (
+              <div className="p-3 rounded-lg bg-[#F8FAFC] border border-slate-200 flex flex-wrap items-center justify-between gap-2 text-xs">
+                {overQuota && (
+                  <span className="text-red-600 font-medium tabular-nums">
+                    Exceeds daily limit ({recipientSet.length} / {dailyLimit} recipients)
+                  </span>
+                )}
+                {missingVarContacts > 0 && (
+                  <span className="text-amber-700 font-medium">
+                    {missingVarContacts} recipient(s) missing a variable field (fallback used)
+                  </span>
+                )}
               </div>
-              {missingVarContacts > 0 ? (
-                <span className="text-amber-700 font-medium">
-                  {missingVarContacts} recipient(s) missing a variable field (fallback used)
-                </span>
-              ) : (
-                <span className="text-slate-500 font-mono">Variables verified</span>
-              )}
-            </div>
+            )}
 
             {/* Scheduling & Primary CTA */}
             <div className="pt-4 border-t border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4">

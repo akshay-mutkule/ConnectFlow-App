@@ -395,31 +395,31 @@ export const EmailPage: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Provider Header */}
-      <div className="bg-white border border-slate-200 rounded-xl p-4 sm:px-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div className="flex items-start sm:items-center gap-3">
-          <div className="w-10 h-10 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
-            <Mail className="w-5 h-5" />
+      <div className="bg-[#F8FAFC] border border-slate-200 rounded-xl px-5 py-3.5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+            <Mail className="w-4 h-4" />
           </div>
           <div>
-            <div className="flex items-center gap-2">
-              <h2 className="font-display text-base font-semibold text-slate-900">
-                Email Marketing Studio
+            <div className="flex items-center gap-2 flex-wrap">
+              <h2 className="text-sm font-semibold text-[#1E293B]">
+                Email Campaigns
               </h2>
               <span
-                className={`text-xs font-semibold ${
+                className={`text-xs font-medium ${
                   isLive ? 'text-blue-600' : 'text-amber-700'
                 }`}
               >
                 {isLive
-                  ? `· Live (${integrations?.emailProvider === 'resend' ? 'Resend API' : 'SMTP'})`
+                  ? `· Live (${integrations?.emailProvider === 'resend' ? 'Resend' : 'SMTP'})`
                   : integrations?.emailConnected
-                    ? '· Demo Mode (Simulated)'
+                    ? '· Demo Mode'
                     : '· Prompt on Send'}
               </span>
             </div>
             <p className="text-xs text-slate-500 mt-0.5">
               {integrations?.emailFromAddress
-                ? `Active sender: ${integrations.emailFromAddress}`
+                ? `Sender: ${integrations.emailFromAddress}`
                 : 'You will be prompted to enter your sender email when clicking Send Email.'}
             </p>
           </div>
@@ -432,10 +432,10 @@ export const EmailPage: React.FC = () => {
             setConnectPromptReason(undefined);
             setConnectModalOpen(true);
           }}
-          className="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 whitespace-nowrap shrink-0"
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 whitespace-nowrap shrink-0"
         >
           <Settings2 className="w-3.5 h-3.5" />
-          <span>{integrations?.emailConnected ? 'Change Email Settings' : 'Connect Email'}</span>
+          <span>{integrations?.emailConnected ? 'Configure' : 'Connect Email'}</span>
         </button>
       </div>
 
@@ -781,26 +781,21 @@ export const EmailPage: React.FC = () => {
               </div>
             </div>
 
-            {/* Pre-Flight Quota & Variable Coverage */}
-            <div className="p-3 rounded-lg bg-[#F8FAFC] border border-slate-200 flex flex-wrap items-center justify-between gap-2 text-xs">
-              <div className="flex items-center gap-2">
-                <span className="text-slate-600">Daily Limit Check:</span>
-                <span
-                  className={`font-mono font-semibold tabular-nums ${
-                    overQuota ? 'text-red-600' : 'text-blue-600'
-                  }`}
-                >
-                  {recipientSet.length} / {dailyLimit} recipients
-                </span>
+            {/* Pre-Flight Guardrail (shown only when quota exceeded or variables missing) */}
+            {(overQuota || missingVarContacts > 0) && (
+              <div className="p-3 rounded-lg bg-[#F8FAFC] border border-slate-200 flex flex-wrap items-center justify-between gap-2 text-xs">
+                {overQuota && (
+                  <span className="text-red-600 font-medium tabular-nums">
+                    Exceeds daily limit ({recipientSet.length} / {dailyLimit} recipients)
+                  </span>
+                )}
+                {missingVarContacts > 0 && (
+                  <span className="text-amber-700 font-medium">
+                    {missingVarContacts} recipient(s) missing a variable field (fallback used)
+                  </span>
+                )}
               </div>
-              {missingVarContacts > 0 ? (
-                <span className="text-amber-700 font-medium">
-                  {missingVarContacts} recipient(s) missing a variable field (fallback used)
-                </span>
-              ) : (
-                <span className="text-slate-500 font-mono">Variables verified</span>
-              )}
-            </div>
+            )}
 
             {/* Schedule & Send Email */}
             <div className="pt-4 border-t border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4">

@@ -1,10 +1,9 @@
-import React, { Suspense, lazy, useState } from 'react';
+import React, { Suspense, lazy } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ToastProvider } from './components/ToastContext';
 import { Layout } from './components/Layout';
 import { LoginPage } from './pages/LoginPage';
-import { DashboardData } from './types';
 import { BrandLogo } from './components/BrandLogo';
 
 const DashboardPage = lazy(() =>
@@ -28,9 +27,6 @@ const TemplatesPage = lazy(() =>
 const SettingsPage = lazy(() =>
   import('./pages/SettingsPage').then((m) => ({ default: m.SettingsPage }))
 );
-const MessageFlow3DModal = lazy(() =>
-  import('./components/MessageFlow3DModal').then((m) => ({ default: m.MessageFlow3DModal }))
-);
 
 function WorkspaceFallback() {
   return (
@@ -42,8 +38,6 @@ function WorkspaceFallback() {
 
 function AppRoutes() {
   const { firebaseUser, loading } = useAuth();
-  const [open3D, setOpen3D] = useState(false);
-  const [latestStats, setLatestStats] = useState<DashboardData['stats'] | null>(null);
 
   if (loading) {
     return (
@@ -61,32 +55,20 @@ function AppRoutes() {
   }
 
   return (
-    <>
-      <Layout onOpen3D={() => setOpen3D(true)}>
-        <Suspense fallback={<WorkspaceFallback />}>
-          <Routes>
-            <Route path="/" element={<DashboardPage onStatsLoaded={setLatestStats} />} />
-            <Route path="/contacts" element={<ContactsPage />} />
-            <Route path="/whatsapp" element={<WhatsAppPage />} />
-            <Route path="/email" element={<EmailPage />} />
-            <Route path="/campaigns" element={<CampaignsPage />} />
-            <Route path="/templates" element={<TemplatesPage />} />
-            <Route path="/settings" element={<SettingsPage />} />
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-        </Suspense>
-      </Layout>
-
-      {open3D && (
-        <Suspense fallback={null}>
-          <MessageFlow3DModal
-            open={open3D}
-            onClose={() => setOpen3D(false)}
-            stats={latestStats}
-          />
-        </Suspense>
-      )}
-    </>
+    <Layout>
+      <Suspense fallback={<WorkspaceFallback />}>
+        <Routes>
+          <Route path="/" element={<DashboardPage />} />
+          <Route path="/contacts" element={<ContactsPage />} />
+          <Route path="/whatsapp" element={<WhatsAppPage />} />
+          <Route path="/email" element={<EmailPage />} />
+          <Route path="/campaigns" element={<CampaignsPage />} />
+          <Route path="/templates" element={<TemplatesPage />} />
+          <Route path="/settings" element={<SettingsPage />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </Suspense>
+    </Layout>
   );
 }
 

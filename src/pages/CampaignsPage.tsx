@@ -235,35 +235,31 @@ export const CampaignsPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Unified Architectural Summary Ledger */}
-      <div className="bg-white border border-slate-200 rounded-xl grid grid-cols-2 lg:grid-cols-4 divide-y lg:divide-y-0 sm:divide-x divide-slate-200 overflow-hidden">
-        <div className="p-4 sm:p-5">
+      {/* Campaign Summary */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="bg-white border border-slate-200 rounded-xl p-4 sm:p-5">
           <p className="text-xs font-medium text-slate-500">Total Campaigns</p>
-          <p className="font-display text-2xl font-bold text-slate-900 mt-1.5 tabular-nums">
+          <p className="font-display text-2xl font-bold text-[#1E293B] mt-1.5 tabular-nums">
             {summary.total}
           </p>
-          <p className="text-[11px] text-slate-400 mt-1 font-mono">All channels</p>
         </div>
-        <div className="p-4 sm:p-5">
+        <div className="bg-white border border-slate-200 rounded-xl p-4 sm:p-5">
           <p className="text-xs font-medium text-slate-500">Completed</p>
           <p className="font-display text-2xl font-bold text-emerald-700 mt-1.5 tabular-nums">
             {summary.completed}
           </p>
-          <p className="text-[11px] text-slate-400 mt-1 font-mono">Dispatched</p>
         </div>
-        <div className="p-4 sm:p-5">
+        <div className="bg-white border border-slate-200 rounded-xl p-4 sm:p-5">
           <p className="text-xs font-medium text-slate-500">Scheduled / Paused</p>
-          <p className="font-display text-2xl font-bold text-slate-900 mt-1.5 tabular-nums">
+          <p className="font-display text-2xl font-bold text-[#1E293B] mt-1.5 tabular-nums">
             {summary.scheduled}
           </p>
-          <p className="text-[11px] text-slate-400 mt-1 font-mono">Queued runs</p>
         </div>
-        <div className="p-4 sm:p-5">
+        <div className="bg-white border border-slate-200 rounded-xl p-4 sm:p-5">
           <p className="text-xs font-medium text-slate-500">Delivery Rate</p>
-          <p className="font-display text-2xl font-bold text-blue-600 mt-1.5 tabular-nums">
+          <p className="font-display text-2xl font-bold text-[#2563EB] mt-1.5 tabular-nums">
             {summary.rate}%
           </p>
-          <p className="text-[11px] text-slate-400 mt-1 font-mono">Across sent logs</p>
         </div>
       </div>
 

@@ -11,7 +11,6 @@ import {
   LogOut,
   Menu,
   X,
-  Box,
   Search,
   ArrowRight,
 } from 'lucide-react';
@@ -22,7 +21,6 @@ import { Campaign, Contact, Template } from '../types';
 
 interface LayoutProps {
   children: React.ReactNode;
-  onOpen3D: () => void;
 }
 
 interface NavItem {
@@ -32,39 +30,17 @@ interface NavItem {
   accent?: 'whatsapp' | 'email';
 }
 
-interface NavGroup {
-  label: string;
-  items: NavItem[];
-}
-
-const NAV_GROUPS: NavGroup[] = [
-  {
-    label: 'Overview',
-    items: [
-      { to: '/', label: 'Dashboard', icon: LayoutDashboard },
-      { to: '/contacts', label: 'Contacts', icon: Users },
-    ],
-  },
-  {
-    label: 'Messaging Channels',
-    items: [
-      { to: '/whatsapp', label: 'WhatsApp', icon: MessageSquare, accent: 'whatsapp' },
-      { to: '/email', label: 'Email', icon: Mail, accent: 'email' },
-    ],
-  },
-  {
-    label: 'Operations',
-    items: [
-      { to: '/campaigns', label: 'Campaigns', icon: Send },
-      { to: '/templates', label: 'Templates', icon: FileText },
-      { to: '/settings', label: 'Settings', icon: Settings },
-    ],
-  },
+const NAV_ITEMS: NavItem[] = [
+  { to: '/', label: 'Dashboard', icon: LayoutDashboard },
+  { to: '/contacts', label: 'Contacts', icon: Users },
+  { to: '/whatsapp', label: 'WhatsApp', icon: MessageSquare, accent: 'whatsapp' },
+  { to: '/email', label: 'Email', icon: Mail, accent: 'email' },
+  { to: '/campaigns', label: 'Campaigns', icon: Send },
+  { to: '/templates', label: 'Templates', icon: FileText },
+  { to: '/settings', label: 'Settings', icon: Settings },
 ];
 
-const ALL_NAV_ITEMS = NAV_GROUPS.flatMap((g) => g.items);
-
-export const Layout: React.FC<LayoutProps> = ({ children, onOpen3D }) => {
+export const Layout: React.FC<LayoutProps> = ({ children }) => {
   const { profile, firebaseUser, logout } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [cmdOpen, setCmdOpen] = useState(false);
@@ -80,7 +56,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, onOpen3D }) => {
   const navigate = useNavigate();
 
   const currentTitle =
-    ALL_NAV_ITEMS.find((item) =>
+    NAV_ITEMS.find((item) =>
       item.to === '/' ? location.pathname === '/' : location.pathname.startsWith(item.to)
     )?.label || 'Dashboard';
 
@@ -139,9 +115,8 @@ export const Layout: React.FC<LayoutProps> = ({ children, onOpen3D }) => {
   };
 
   const sidebarContent = (
-    <div className="flex flex-col h-full bg-white border-r border-slate-200 w-64">
-      {/* Brand Lockup */}
-      <div className="h-16 px-5 flex items-center justify-between border-b border-slate-200 shrink-0">
+    <div className="flex flex-col h-full bg-[#F8FAFC] border-r border-slate-200 w-60">
+      <div className="h-16 px-5 flex items-center justify-between border-b border-slate-200/80 shrink-0">
         <BrandLogo size="sm" />
         <button
           type="button"
@@ -153,66 +128,57 @@ export const Layout: React.FC<LayoutProps> = ({ children, onOpen3D }) => {
         </button>
       </div>
 
-      {/* Grouped Navigation */}
-      <nav className="flex-1 px-3 py-5 space-y-6 overflow-y-auto">
-        {NAV_GROUPS.map((group) => (
-          <div key={group.label} className="space-y-1">
-            <p className="px-3 text-[11px] font-semibold text-slate-400 tracking-wide mb-1.5">
-              {group.label}
-            </p>
-            {group.items.map((item) => {
-              const Icon = item.icon;
-              return (
-                <NavLink
-                  key={item.to}
-                  to={item.to}
-                  end={item.to === '/'}
-                  onClick={() => setMobileOpen(false)}
-                  className={({ isActive }) => {
-                    const activeStyles =
-                      item.accent === 'whatsapp'
-                        ? 'bg-emerald-50 text-emerald-800 font-semibold ring-1 ring-emerald-200/70'
-                        : item.accent === 'email'
-                          ? 'bg-blue-50 text-blue-700 font-semibold ring-1 ring-blue-200/70'
-                          : 'bg-slate-900 text-white font-semibold shadow-xs';
-                    return `flex items-center gap-3 px-3 py-2 rounded-lg text-[13.5px] transition-all duration-150 whitespace-nowrap ${
+      <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+        {NAV_ITEMS.map((item) => {
+          const Icon = item.icon;
+          return (
+            <NavLink
+              key={item.to}
+              to={item.to}
+              end={item.to === '/'}
+              onClick={() => setMobileOpen(false)}
+              className={({ isActive }) => {
+                const activeStyles =
+                  item.accent === 'whatsapp'
+                    ? 'bg-emerald-50 text-emerald-800 font-semibold border border-emerald-200/80'
+                    : item.accent === 'email'
+                      ? 'bg-blue-50 text-blue-700 font-semibold border border-blue-200/80'
+                      : 'bg-white text-slate-900 font-semibold border border-slate-200 shadow-xs';
+                return `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors whitespace-nowrap ${
+                  isActive
+                    ? activeStyles
+                    : 'text-slate-600 hover:bg-white/80 hover:text-slate-900 font-medium border border-transparent'
+                }`;
+              }}
+            >
+              {({ isActive }) => (
+                <>
+                  <Icon
+                    className={`w-4 h-4 shrink-0 ${
                       isActive
-                        ? activeStyles
-                        : 'text-slate-600 hover:bg-slate-100/80 hover:text-slate-900 font-medium'
-                    }`;
-                  }}
-                >
-                  {({ isActive }) => (
-                    <>
-                      <Icon
-                        className={`w-4 h-4 shrink-0 ${
-                          isActive
-                            ? item.accent === 'whatsapp'
-                              ? 'text-emerald-600'
-                              : item.accent === 'email'
-                                ? 'text-blue-600'
-                                : 'text-white'
-                            : 'text-slate-400'
-                        }`}
-                      />
-                      <span>{item.label}</span>
-                    </>
-                  )}
-                </NavLink>
-              );
-            })}
-          </div>
-        ))}
+                        ? item.accent === 'whatsapp'
+                          ? 'text-emerald-600'
+                          : item.accent === 'email'
+                            ? 'text-blue-600'
+                            : 'text-blue-600'
+                        : 'text-slate-400'
+                    }`}
+                  />
+                  <span>{item.label}</span>
+                </>
+              )}
+            </NavLink>
+          );
+        })}
       </nav>
 
-      {/* Bottom User Profile & Sign Out */}
-      <div className="p-3 border-t border-slate-200 shrink-0 space-y-1 bg-[#F8FAFC]/70">
+      <div className="p-3 border-t border-slate-200/80 shrink-0 space-y-1">
         <NavLink
           to="/settings"
           onClick={() => setMobileOpen(false)}
-          className="flex items-center gap-3 px-2.5 py-2 rounded-lg hover:bg-white hover:ring-1 hover:ring-slate-200/80 transition-all"
+          className="flex items-center gap-2.5 px-2.5 py-2 rounded-lg hover:bg-white transition-colors"
         >
-          <div className="w-8 h-8 rounded-lg bg-slate-900 text-white flex items-center justify-center text-xs font-semibold shrink-0 font-display">
+          <div className="w-8 h-8 rounded-full bg-slate-200 text-slate-800 flex items-center justify-center text-xs font-semibold shrink-0 font-display">
             {initials || 'CF'}
           </div>
           <div className="min-w-0 flex-1">
@@ -223,7 +189,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, onOpen3D }) => {
         <button
           type="button"
           onClick={logout}
-          className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium text-slate-600 hover:text-red-600 hover:bg-red-50 transition-colors whitespace-nowrap"
+          className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium text-slate-500 hover:text-red-600 hover:bg-red-50 transition-colors whitespace-nowrap"
         >
           <LogOut className="w-3.5 h-3.5 shrink-0" />
           <span>Sign out</span>
@@ -233,26 +199,23 @@ export const Layout: React.FC<LayoutProps> = ({ children, onOpen3D }) => {
   );
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] flex">
-      {/* Desktop Fixed Sidebar */}
-      <aside className="hidden lg:block fixed inset-y-0 left-0 z-30 w-64">
+    <div className="min-h-screen bg-white flex">
+      <aside className="hidden lg:block fixed inset-y-0 left-0 z-30 w-60">
         {sidebarContent}
       </aside>
 
-      {/* Mobile Drawer */}
       {mobileOpen && (
         <div className="fixed inset-0 z-40 lg:hidden flex">
           <div
-            className="fixed inset-0 bg-slate-900/40"
+            className="fixed inset-0 bg-slate-900/30"
             onClick={() => setMobileOpen(false)}
           />
           <div className="relative z-50 h-full">{sidebarContent}</div>
         </div>
       )}
 
-      {/* Main Viewport */}
-      <div className="flex-1 lg:pl-64 flex flex-col min-w-0">
-        <header className="h-16 bg-white border-b border-slate-200 px-4 sm:px-8 flex items-center justify-between gap-4 sticky top-0 z-20">
+      <div className="flex-1 lg:pl-60 flex flex-col min-w-0 bg-white">
+        <header className="h-16 bg-white border-b border-slate-200/80 px-4 sm:px-8 flex items-center justify-between gap-4 sticky top-0 z-20">
           <div className="flex items-center gap-3 min-w-0">
             <button
               type="button"
@@ -262,52 +225,36 @@ export const Layout: React.FC<LayoutProps> = ({ children, onOpen3D }) => {
             >
               <Menu className="w-5 h-5" />
             </button>
-            <div className="flex items-center gap-2 text-sm min-w-0">
-              <span className="text-slate-400 hidden sm:inline">Workspace</span>
-              <span className="text-slate-300 hidden sm:inline">/</span>
-              <h1 className="font-display font-semibold text-slate-900 text-base truncate">
-                {currentTitle}
-              </h1>
-            </div>
+            <h1 className="font-display font-semibold text-slate-900 text-base truncate">
+              {currentTitle}
+            </h1>
           </div>
 
-          <div className="flex items-center gap-2.5 shrink-0">
-            <button
-              type="button"
-              onClick={() => setCmdOpen(true)}
-              className="hidden sm:inline-flex items-center gap-2.5 px-3 py-1.5 text-xs text-slate-500 bg-[#F8FAFC] border border-slate-200 rounded-lg hover:border-slate-300 hover:text-slate-800 transition-colors whitespace-nowrap"
-            >
-              <Search className="w-3.5 h-3.5 text-slate-400" />
-              <span>Quick jump...</span>
-              <kbd className="font-mono text-[10px] text-slate-400 border border-slate-200 bg-white px-1.5 py-0.5 rounded">
-                ⌘K
-              </kbd>
-            </button>
-
-            <button
-              type="button"
-              onClick={onOpen3D}
-              className="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 hover:border-slate-300 transition-colors whitespace-nowrap shrink-0"
-            >
-              <Box className="w-3.5 h-3.5 text-blue-600" />
-              <span>3D Routing</span>
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={() => setCmdOpen(true)}
+            className="inline-flex items-center gap-2.5 px-3 py-1.5 text-xs text-slate-500 bg-[#F8FAFC] border border-slate-200 rounded-lg hover:border-slate-300 hover:text-slate-800 transition-colors whitespace-nowrap shrink-0"
+          >
+            <Search className="w-3.5 h-3.5 text-slate-400" />
+            <span className="hidden sm:inline">Search...</span>
+            <kbd className="hidden sm:inline font-mono text-[10px] text-slate-400 border border-slate-200 bg-white px-1.5 py-0.5 rounded">
+              ⌘K
+            </kbd>
+          </button>
         </header>
 
-        <main key={location.pathname} className="flex-1 p-4 sm:p-8 max-w-7xl w-full mx-auto cf-page-enter">
+        <main key={location.pathname} className="flex-1 p-4 sm:p-8 max-w-6xl w-full mx-auto cf-page-enter">
           {children}
         </main>
       </div>
 
-      {/* Global Command / Quick Search Modal */}
       {cmdOpen && (
         <div
-          className="fixed inset-0 z-50 flex items-start justify-center bg-slate-900/40 pt-20 p-4"
+          className="fixed inset-0 z-50 flex items-start justify-center bg-slate-900/30 pt-20 p-4"
           onClick={() => setCmdOpen(false)}
         >
           <div
-            className="bg-white border border-slate-200 rounded-xl w-full max-w-lg shadow-2xl overflow-hidden"
+            className="bg-white border border-slate-200 rounded-xl w-full max-w-lg shadow-xl overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center gap-3 px-4 py-3 border-b border-slate-200">
@@ -332,15 +279,12 @@ export const Layout: React.FC<LayoutProps> = ({ children, onOpen3D }) => {
             <div className="max-h-80 overflow-y-auto p-2 space-y-3">
               {!cmdQuery.trim() ? (
                 <div className="p-2 space-y-1">
-                  <p className="px-2 py-1 text-[11px] font-semibold text-slate-400">
-                    Quick Actions
-                  </p>
                   <button
                     type="button"
                     onClick={() => jumpTo('/whatsapp')}
                     className="w-full flex items-center justify-between px-3 py-2 text-xs font-medium text-slate-700 rounded-lg hover:bg-emerald-50 hover:text-emerald-800"
                   >
-                    <span>Compose WhatsApp Campaign</span>
+                    <span>Send WhatsApp Message</span>
                     <ArrowRight className="w-3.5 h-3.5" />
                   </button>
                   <button
@@ -348,7 +292,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, onOpen3D }) => {
                     onClick={() => jumpTo('/email')}
                     className="w-full flex items-center justify-between px-3 py-2 text-xs font-medium text-slate-700 rounded-lg hover:bg-blue-50 hover:text-blue-700"
                   >
-                    <span>Compose Email Campaign</span>
+                    <span>Send Email</span>
                     <ArrowRight className="w-3.5 h-3.5" />
                   </button>
                   <button
@@ -356,7 +300,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, onOpen3D }) => {
                     onClick={() => jumpTo('/contacts')}
                     className="w-full flex items-center justify-between px-3 py-2 text-xs font-medium text-slate-700 rounded-lg hover:bg-slate-100"
                   >
-                    <span>Manage Contacts &amp; Groups</span>
+                    <span>Manage Contacts</span>
                     <ArrowRight className="w-3.5 h-3.5" />
                   </button>
                 </div>
@@ -366,15 +310,13 @@ export const Layout: React.FC<LayoutProps> = ({ children, onOpen3D }) => {
                 cmdResults.campaigns.length === 0 &&
                 cmdResults.templates.length === 0 ? (
                 <p className="p-6 text-center text-xs text-slate-500">
-                  No matching contacts, campaigns, or templates.
+                  No matching results found.
                 </p>
               ) : (
                 <>
                   {cmdResults.contacts.length > 0 && (
                     <div>
-                      <p className="px-2 py-1 text-[11px] font-semibold text-slate-400">
-                        Contacts
-                      </p>
+                      <p className="px-2 py-1 text-[11px] font-semibold text-slate-400">Contacts</p>
                       {cmdResults.contacts.map((c) => (
                         <button
                           key={c.id}
@@ -395,9 +337,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, onOpen3D }) => {
                   )}
                   {cmdResults.campaigns.length > 0 && (
                     <div>
-                      <p className="px-2 py-1 text-[11px] font-semibold text-slate-400">
-                        Campaigns
-                      </p>
+                      <p className="px-2 py-1 text-[11px] font-semibold text-slate-400">Campaigns</p>
                       {cmdResults.campaigns.map((c) => (
                         <button
                           key={c.id}
@@ -418,9 +358,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, onOpen3D }) => {
                   )}
                   {cmdResults.templates.length > 0 && (
                     <div>
-                      <p className="px-2 py-1 text-[11px] font-semibold text-slate-400">
-                        Templates
-                      </p>
+                      <p className="px-2 py-1 text-[11px] font-semibold text-slate-400">Templates</p>
                       {cmdResults.templates.map((t) => (
                         <button
                           key={t.id}
