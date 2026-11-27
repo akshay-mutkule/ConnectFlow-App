@@ -185,37 +185,27 @@ export const SettingsPage: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
-        <div>
-          <h2 className="font-display text-2xl font-bold text-slate-900 tracking-tight">
-            Workspace Settings
-          </h2>
-          <p className="text-sm text-slate-500 mt-1">
-            Manage your account profile, messaging API connections, notifications, and audit history.
-          </p>
-        </div>
-
-        <button
-          type="button"
-          onClick={logout}
-          className="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-semibold text-red-600 bg-white border border-red-200 rounded-lg hover:bg-red-50 transition-colors self-start sm:self-auto"
-        >
-          <LogOut className="w-3.5 h-3.5" />
-          <span>Sign Out</span>
-        </button>
-      </div>
-
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* Left Column: Profile, Rate Limits & Notifications */}
         <form
           onSubmit={handleSaveProfile}
-          className="lg:col-span-7 bg-white border border-slate-200 rounded-xl overflow-hidden"
+          className="lg:col-span-7 bg-white border border-slate-200 rounded-lg overflow-hidden"
         >
-          <div className="px-6 py-4 border-b border-slate-200 flex items-center gap-2.5">
-            <User className="w-4 h-4 text-blue-600" />
-            <h3 className="font-display text-sm font-semibold text-slate-900">
-              Profile &amp; Account Information
-            </h3>
+          <div className="px-6 py-3.5 border-b border-slate-200 flex items-center justify-between gap-2.5">
+            <div className="flex items-center gap-2">
+              <User className="w-4 h-4 text-slate-500" />
+              <h2 className="font-display text-sm font-semibold text-slate-900">
+                Profile &amp; Preferences
+              </h2>
+            </div>
+            <button
+              type="button"
+              onClick={logout}
+              className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-500 hover:text-red-600 transition-colors"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              <span>Sign Out</span>
+            </button>
           </div>
 
           <div className="p-6 space-y-6">
@@ -311,20 +301,18 @@ export const SettingsPage: React.FC = () => {
 
         {/* Right Column: Messaging Channel Integrations */}
         <div className="lg:col-span-5 space-y-4">
-          <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-4">
+          <div className="bg-white border border-slate-200 rounded-lg p-5 space-y-4">
             <div className="flex items-start justify-between gap-3">
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
-                  <MessageSquare className="w-4 h-4" />
-                </div>
+              <div className="flex items-start gap-2.5">
+                <MessageSquare className="w-4 h-4 text-emerald-600 mt-0.5 shrink-0" />
                 <div>
-                  <h3 className="font-display text-sm font-semibold text-slate-900">
+                  <h2 className="font-display text-sm font-semibold text-slate-900">
                     WhatsApp Business API
-                  </h3>
+                  </h2>
                   <p className="text-xs font-mono text-slate-500 mt-0.5">
                     {integrations?.whatsappConnected && integrations.whatsappMode === 'live'
                       ? `Live · ID ${integrations.whatsappPhoneNumberId}`
-                      : 'Demo Mode (Simulated)'}
+                      : 'Demo Mode'}
                   </p>
                 </div>
               </div>
@@ -404,16 +392,14 @@ export const SettingsPage: React.FC = () => {
             </div>
           </div>
 
-          <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-4">
+          <div className="bg-white border border-slate-200 rounded-lg p-5 space-y-4">
             <div className="flex items-start justify-between gap-3">
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
-                  <Mail className="w-4 h-4" />
-                </div>
+              <div className="flex items-start gap-2.5">
+                <Mail className="w-4 h-4 text-blue-600 mt-0.5 shrink-0" />
                 <div>
-                  <h3 className="font-display text-sm font-semibold text-slate-900">
+                  <h2 className="font-display text-sm font-semibold text-slate-900">
                     Gmail / Email Connection
-                  </h3>
+                  </h2>
                   <p className="text-xs font-mono text-slate-500 mt-0.5">
                     {integrations?.emailConnected
                       ? `${integrations.emailMode === 'live' ? 'Live' : 'Demo'} · ${integrations.emailFromAddress}`
@@ -479,14 +465,14 @@ export const SettingsPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Security & Audit Log */}
-      <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
-        <div className="px-6 py-4 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3">
+      {/* Audit Log */}
+      <div className="bg-white border border-slate-200 rounded-lg overflow-hidden">
+        <div className="px-6 py-3.5 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2">
-            <Shield className="w-4 h-4 text-slate-600" />
-            <h3 className="font-display text-sm font-semibold text-slate-900">
-              Security &amp; Campaign Audit Ledger
-            </h3>
+            <Shield className="w-4 h-4 text-slate-500" />
+            <h2 className="font-display text-sm font-semibold text-slate-900">
+              Audit Log
+            </h2>
             <span className="text-[11px] font-mono text-slate-400 tabular-nums">
               · {filteredAuditLogs.length} events
             </span>

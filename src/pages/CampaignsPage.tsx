@@ -207,27 +207,23 @@ export const CampaignsPage: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
-        <div>
-          <h2 className="font-display text-2xl font-bold text-slate-900 tracking-tight">
-            Campaign Management
-          </h2>
-          <p className="text-sm text-slate-500 mt-1">
-            Inspect delivery reports, duplicate past sends, and control scheduled dispatches.
-          </p>
-        </div>
+      {/* Top Toolbar */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-xs text-slate-500 font-mono tabular-nums">
+          {filtered.length} campaign{filtered.length === 1 ? '' : 's'}
+        </p>
 
         <div className="flex flex-wrap items-center gap-2">
           <Link
             to="/whatsapp"
-            className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 transition-colors whitespace-nowrap"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-emerald-600 rounded-md hover:bg-emerald-700 transition-colors whitespace-nowrap"
           >
             <MessageSquare className="w-3.5 h-3.5" />
             <span>New WhatsApp</span>
           </Link>
           <Link
             to="/email"
-            className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors whitespace-nowrap"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 transition-colors whitespace-nowrap"
           >
             <Mail className="w-3.5 h-3.5" />
             <span>New Email</span>
@@ -235,29 +231,29 @@ export const CampaignsPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Campaign Summary */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white border border-slate-200 rounded-xl p-4 sm:p-5">
-          <p className="text-xs font-medium text-slate-500">Total Campaigns</p>
-          <p className="font-display text-2xl font-bold text-[#1E293B] mt-1.5 tabular-nums">
+      {/* Unified 4-Column Metric Strip */}
+      <div className="bg-white border border-slate-200 rounded-lg grid grid-cols-2 lg:grid-cols-4 divide-y lg:divide-y-0 sm:divide-x divide-slate-200 overflow-hidden">
+        <div className="p-4">
+          <p className="text-xs text-slate-500">Total Campaigns</p>
+          <p className="font-display text-2xl font-semibold text-slate-900 mt-1 tabular-nums">
             {summary.total}
           </p>
         </div>
-        <div className="bg-white border border-slate-200 rounded-xl p-4 sm:p-5">
-          <p className="text-xs font-medium text-slate-500">Completed</p>
-          <p className="font-display text-2xl font-bold text-emerald-700 mt-1.5 tabular-nums">
+        <div className="p-4">
+          <p className="text-xs text-slate-500">Completed</p>
+          <p className="font-display text-2xl font-semibold text-emerald-700 mt-1 tabular-nums">
             {summary.completed}
           </p>
         </div>
-        <div className="bg-white border border-slate-200 rounded-xl p-4 sm:p-5">
-          <p className="text-xs font-medium text-slate-500">Scheduled / Paused</p>
-          <p className="font-display text-2xl font-bold text-[#1E293B] mt-1.5 tabular-nums">
+        <div className="p-4">
+          <p className="text-xs text-slate-500">Scheduled / Paused</p>
+          <p className="font-display text-2xl font-semibold text-slate-900 mt-1 tabular-nums">
             {summary.scheduled}
           </p>
         </div>
-        <div className="bg-white border border-slate-200 rounded-xl p-4 sm:p-5">
-          <p className="text-xs font-medium text-slate-500">Delivery Rate</p>
-          <p className="font-display text-2xl font-bold text-[#2563EB] mt-1.5 tabular-nums">
+        <div className="p-4">
+          <p className="text-xs text-slate-500">Delivery Rate</p>
+          <p className="font-display text-2xl font-semibold text-blue-600 mt-1 tabular-nums">
             {summary.rate}%
           </p>
         </div>
@@ -265,7 +261,7 @@ export const CampaignsPage: React.FC = () => {
 
       {/* Filters & Live Search */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
-        <div className="inline-flex flex-wrap items-center gap-1 p-1 bg-slate-100 rounded-lg">
+        <div className="inline-flex flex-wrap items-center gap-0.5 p-0.5 bg-[#F8FAFC] border border-slate-200 rounded-md">
           {(
             [
               ['all', 'All'],
@@ -280,9 +276,9 @@ export const CampaignsPage: React.FC = () => {
               key={key}
               type="button"
               onClick={() => setFilter(key)}
-              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors whitespace-nowrap ${
+              className={`px-3 py-1.5 text-xs font-medium rounded transition-colors whitespace-nowrap ${
                 filter === key
-                  ? 'bg-white text-slate-900 shadow-sm'
+                  ? 'bg-white text-slate-900 shadow-xs'
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
@@ -298,13 +294,13 @@ export const CampaignsPage: React.FC = () => {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search campaign name..."
-            className="w-full pl-9 pr-3 py-2 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:border-blue-500"
+            className="w-full pl-9 pr-3 py-1.5 text-sm bg-white border border-slate-200 rounded-md focus:outline-none focus:border-blue-500"
           />
         </div>
       </div>
 
       {/* Campaigns Table */}
-      <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
+      <div className="bg-white border border-slate-200 rounded-lg overflow-hidden">
         {loading ? (
           <div className="p-8 text-center text-sm text-slate-500">Loading campaigns...</div>
         ) : filtered.length === 0 ? (

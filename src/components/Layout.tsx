@@ -115,8 +115,8 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   };
 
   const sidebarContent = (
-    <div className="flex flex-col h-full bg-[#F8FAFC] border-r border-slate-200 w-60">
-      <div className="h-16 px-5 flex items-center justify-between border-b border-slate-200/80 shrink-0">
+    <div className="flex flex-col h-full bg-[#F8FAFC] border-r border-slate-200 w-56">
+      <div className="h-14 px-5 flex items-center justify-between border-b border-slate-200 shrink-0">
         <BrandLogo size="sm" />
         <button
           type="button"
@@ -128,7 +128,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
         </button>
       </div>
 
-      <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+      <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
         {NAV_ITEMS.map((item) => {
           const Icon = item.icon;
           return (
@@ -140,14 +140,14 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
               className={({ isActive }) => {
                 const activeStyles =
                   item.accent === 'whatsapp'
-                    ? 'bg-emerald-50 text-emerald-800 font-semibold border border-emerald-200/80'
+                    ? 'bg-emerald-600/10 text-emerald-800 font-medium'
                     : item.accent === 'email'
-                      ? 'bg-blue-50 text-blue-700 font-semibold border border-blue-200/80'
-                      : 'bg-white text-slate-900 font-semibold border border-slate-200 shadow-xs';
-                return `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors whitespace-nowrap ${
+                      ? 'bg-blue-600/10 text-blue-700 font-medium'
+                      : 'bg-slate-200/70 text-slate-900 font-medium';
+                return `flex items-center gap-2.5 px-3 py-2 rounded-md text-[13px] transition-colors whitespace-nowrap ${
                   isActive
                     ? activeStyles
-                    : 'text-slate-600 hover:bg-white/80 hover:text-slate-900 font-medium border border-transparent'
+                    : 'text-slate-600 hover:bg-slate-200/45 hover:text-slate-900 font-normal'
                 }`;
               }}
             >
@@ -157,10 +157,10 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                     className={`w-4 h-4 shrink-0 ${
                       isActive
                         ? item.accent === 'whatsapp'
-                          ? 'text-emerald-600'
+                          ? 'text-emerald-700'
                           : item.accent === 'email'
                             ? 'text-blue-600'
-                            : 'text-blue-600'
+                            : 'text-slate-900'
                         : 'text-slate-400'
                     }`}
                   />
@@ -172,24 +172,24 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
         })}
       </nav>
 
-      <div className="p-3 border-t border-slate-200/80 shrink-0 space-y-1">
+      <div className="p-3 border-t border-slate-200 shrink-0 space-y-1">
         <NavLink
           to="/settings"
           onClick={() => setMobileOpen(false)}
-          className="flex items-center gap-2.5 px-2.5 py-2 rounded-lg hover:bg-white transition-colors"
+          className="flex items-center gap-2.5 px-2.5 py-2 rounded-md hover:bg-slate-200/50 transition-colors"
         >
-          <div className="w-8 h-8 rounded-full bg-slate-200 text-slate-800 flex items-center justify-center text-xs font-semibold shrink-0 font-display">
+          <div className="w-7 h-7 rounded-full bg-slate-200 text-slate-800 flex items-center justify-center text-[11px] font-semibold shrink-0 font-display">
             {initials || 'CF'}
           </div>
           <div className="min-w-0 flex-1">
-            <p className="text-xs font-semibold text-slate-900 truncate">{displayName}</p>
+            <p className="text-xs font-medium text-slate-900 truncate">{displayName}</p>
             <p className="text-[11px] text-slate-500 truncate">{displayEmail}</p>
           </div>
         </NavLink>
         <button
           type="button"
           onClick={logout}
-          className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium text-slate-500 hover:text-red-600 hover:bg-red-50 transition-colors whitespace-nowrap"
+          className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-xs font-medium text-slate-500 hover:text-red-600 hover:bg-red-50 transition-colors whitespace-nowrap"
         >
           <LogOut className="w-3.5 h-3.5 shrink-0" />
           <span>Sign out</span>
@@ -200,7 +200,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
 
   return (
     <div className="min-h-screen bg-white flex">
-      <aside className="hidden lg:block fixed inset-y-0 left-0 z-30 w-60">
+      <aside className="hidden lg:block fixed inset-y-0 left-0 z-30 w-56">
         {sidebarContent}
       </aside>
 
@@ -214,18 +214,18 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
         </div>
       )}
 
-      <div className="flex-1 lg:pl-60 flex flex-col min-w-0 bg-white">
-        <header className="h-16 bg-white border-b border-slate-200/80 px-4 sm:px-8 flex items-center justify-between gap-4 sticky top-0 z-20">
+      <div className="flex-1 lg:pl-56 flex flex-col min-w-0 bg-white">
+        <header className="h-14 bg-white border-b border-slate-200 px-4 sm:px-8 flex items-center justify-between gap-4 sticky top-0 z-20">
           <div className="flex items-center gap-3 min-w-0">
             <button
               type="button"
               onClick={() => setMobileOpen(true)}
-              className="lg:hidden p-2 -ml-2 text-slate-600 hover:text-slate-900 rounded-lg"
+              className="lg:hidden p-2 -ml-2 text-slate-600 hover:text-slate-900 rounded-md"
               aria-label="Open navigation"
             >
               <Menu className="w-5 h-5" />
             </button>
-            <h1 className="font-display font-semibold text-slate-900 text-base truncate">
+            <h1 className="font-display font-semibold text-slate-900 text-[15px] truncate">
               {currentTitle}
             </h1>
           </div>
@@ -233,17 +233,19 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
           <button
             type="button"
             onClick={() => setCmdOpen(true)}
-            className="inline-flex items-center gap-2.5 px-3 py-1.5 text-xs text-slate-500 bg-[#F8FAFC] border border-slate-200 rounded-lg hover:border-slate-300 hover:text-slate-800 transition-colors whitespace-nowrap shrink-0"
+            className="inline-flex items-center justify-between gap-4 px-3 py-1.5 text-xs text-slate-500 bg-white border border-slate-200 rounded-md hover:border-slate-300 hover:text-slate-800 transition-colors whitespace-nowrap shrink-0 sm:w-56"
           >
-            <Search className="w-3.5 h-3.5 text-slate-400" />
-            <span className="hidden sm:inline">Search...</span>
-            <kbd className="hidden sm:inline font-mono text-[10px] text-slate-400 border border-slate-200 bg-white px-1.5 py-0.5 rounded">
+            <span className="inline-flex items-center gap-2">
+              <Search className="w-3.5 h-3.5 text-slate-400" />
+              <span className="hidden sm:inline">Search...</span>
+            </span>
+            <kbd className="hidden sm:inline font-mono text-[10px] text-slate-400">
               ⌘K
             </kbd>
           </button>
         </header>
 
-        <main key={location.pathname} className="flex-1 p-4 sm:p-8 max-w-6xl w-full mx-auto cf-page-enter">
+        <main className="flex-1 p-5 sm:p-8 max-w-6xl w-full mx-auto">
           {children}
         </main>
       </div>

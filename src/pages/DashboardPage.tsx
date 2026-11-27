@@ -100,35 +100,30 @@ export const DashboardPage: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* Header & Quick Actions */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h2 className="font-display text-2xl font-bold text-slate-900 tracking-tight">
-            {profile?.displayName ? `Welcome back, ${profile.displayName.split(' ')[0]}` : 'Overview'}
-          </h2>
-          <p className="text-sm text-slate-500 mt-0.5">
-            WhatsApp and Email delivery summary.
-          </p>
-        </div>
+      {/* Quick Actions Bar */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <p className="text-sm font-medium text-slate-700">
+          {profile?.displayName ? `${profile.displayName.split(' ')[0]}'s workspace` : 'Overview'}
+        </p>
 
         <div className="flex flex-wrap items-center gap-2">
           <Link
             to="/whatsapp"
-            className="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-semibold text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 transition-colors whitespace-nowrap shrink-0"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-emerald-600 rounded-md hover:bg-emerald-700 transition-colors whitespace-nowrap shrink-0"
           >
             <MessageSquare className="w-3.5 h-3.5" />
             <span>Send WhatsApp Message</span>
           </Link>
           <Link
             to="/email"
-            className="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors whitespace-nowrap shrink-0"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 transition-colors whitespace-nowrap shrink-0"
           >
             <Mail className="w-3.5 h-3.5" />
             <span>Send Email</span>
           </Link>
           <Link
             to="/contacts"
-            className="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-[#F8FAFC] transition-colors whitespace-nowrap shrink-0"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-700 bg-white border border-slate-200 rounded-md hover:bg-[#F8FAFC] transition-colors whitespace-nowrap shrink-0"
           >
             <Users className="w-3.5 h-3.5" />
             <span>Manage Contacts</span>
@@ -136,49 +131,49 @@ export const DashboardPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Simple 5-Stat Grid */}
+      {/* Unified 5-Column Metric Strip */}
       <div
-        className={`grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 transition-opacity ${
+        className={`bg-white border border-slate-200 rounded-lg grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 divide-y sm:divide-y-0 sm:divide-x divide-slate-200 overflow-hidden transition-opacity ${
           refreshing ? 'opacity-70' : 'opacity-100'
         }`}
       >
         <Link
           to="/contacts"
-          className="bg-white border border-slate-200 rounded-xl p-4 hover:border-slate-300 transition-colors"
+          className="p-4 hover:bg-[#F8FAFC] transition-colors"
         >
-          <p className="text-xs font-medium text-slate-500">Total Contacts</p>
-          <p className="font-display text-2xl font-bold text-slate-900 mt-1.5 tabular-nums">
+          <p className="text-xs text-slate-500">Total Contacts</p>
+          <p className="font-display text-2xl font-semibold text-slate-900 mt-1 tabular-nums">
             {data.stats.totalContacts.toLocaleString()}
           </p>
         </Link>
 
         <Link
           to="/whatsapp"
-          className="bg-white border border-slate-200 rounded-xl p-4 hover:border-slate-300 transition-colors"
+          className="p-4 hover:bg-[#F8FAFC] transition-colors"
         >
-          <p className="text-xs font-medium text-slate-500">WhatsApp Sent</p>
-          <p className="font-display text-2xl font-bold text-emerald-700 mt-1.5 tabular-nums">
+          <p className="text-xs text-slate-500">WhatsApp Sent</p>
+          <p className="font-display text-2xl font-semibold text-emerald-700 mt-1 tabular-nums">
             {data.stats.whatsappSent.toLocaleString()}
           </p>
         </Link>
 
         <Link
           to="/email"
-          className="bg-white border border-slate-200 rounded-xl p-4 hover:border-slate-300 transition-colors"
+          className="p-4 hover:bg-[#F8FAFC] transition-colors"
         >
-          <p className="text-xs font-medium text-slate-500">Emails Sent</p>
-          <p className="font-display text-2xl font-bold text-blue-600 mt-1.5 tabular-nums">
+          <p className="text-xs text-slate-500">Emails Sent</p>
+          <p className="font-display text-2xl font-semibold text-blue-600 mt-1 tabular-nums">
             {data.stats.emailsSent.toLocaleString()}
           </p>
         </Link>
 
         <Link
           to="/campaigns"
-          className="bg-white border border-slate-200 rounded-xl p-4 hover:border-slate-300 transition-colors"
+          className="p-4 hover:bg-[#F8FAFC] transition-colors"
         >
-          <p className="text-xs font-medium text-slate-500">Successful Deliveries</p>
-          <div className="flex items-baseline gap-2 mt-1.5">
-            <p className="font-display text-2xl font-bold text-slate-900 tabular-nums">
+          <p className="text-xs text-slate-500">Successful Deliveries</p>
+          <div className="flex items-baseline gap-2 mt-1">
+            <p className="font-display text-2xl font-semibold text-slate-900 tabular-nums">
               {data.stats.successfulDeliveries.toLocaleString()}
             </p>
             {totalSent > 0 && (
@@ -191,10 +186,10 @@ export const DashboardPage: React.FC = () => {
 
         <Link
           to="/campaigns"
-          className="bg-white border border-slate-200 rounded-xl p-4 col-span-2 sm:col-span-1 hover:border-slate-300 transition-colors"
+          className="p-4 col-span-2 sm:col-span-1 hover:bg-[#F8FAFC] transition-colors"
         >
-          <p className="text-xs font-medium text-slate-500">Failed Messages</p>
-          <p className="font-display text-2xl font-bold text-red-600 mt-1.5 tabular-nums">
+          <p className="text-xs text-slate-500">Failed Messages</p>
+          <p className="font-display text-2xl font-semibold text-red-600 mt-1 tabular-nums">
             {data.stats.failedMessages.toLocaleString()}
           </p>
         </Link>
@@ -202,11 +197,11 @@ export const DashboardPage: React.FC = () => {
 
       {/* Delivery Chart + Channel Status */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 bg-white border border-slate-200 rounded-xl p-5 flex flex-col justify-between">
+        <div className="lg:col-span-2 bg-white border border-slate-200 rounded-lg p-5 flex flex-col justify-between">
           <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
-            <h3 className="font-display text-sm font-semibold text-slate-900">
+            <h2 className="font-display text-sm font-semibold text-slate-900">
               {chartMode === 'campaigns' ? 'Delivery Breakdown' : 'Daily Send Volume'}
-            </h3>
+            </h2>
 
             <div className="flex flex-wrap items-center gap-2">
               <div className="inline-flex p-0.5 bg-[#F8FAFC] border border-slate-200 rounded-lg text-[11px] font-medium">
@@ -427,9 +422,9 @@ export const DashboardPage: React.FC = () => {
         </div>
 
         {/* Channel Status */}
-        <div className="bg-white border border-slate-200 rounded-xl divide-y divide-slate-200 flex flex-col">
+        <div className="bg-white border border-slate-200 rounded-lg divide-y divide-slate-200 flex flex-col">
           <div className="px-5 py-3.5 flex items-center justify-between">
-            <h3 className="font-display text-sm font-semibold text-slate-900">Channels</h3>
+            <h2 className="font-display text-sm font-semibold text-slate-900">Channels</h2>
             <Link
               to="/settings"
               className="text-xs font-medium text-slate-500 hover:text-slate-900 inline-flex items-center gap-1"
@@ -487,9 +482,9 @@ export const DashboardPage: React.FC = () => {
 
       {/* Recent Campaigns & Activity */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 bg-white border border-slate-200 rounded-xl overflow-hidden">
+        <div className="lg:col-span-2 bg-white border border-slate-200 rounded-lg overflow-hidden">
           <div className="px-5 py-3.5 border-b border-slate-200 flex items-center justify-between">
-            <h3 className="font-display text-sm font-semibold text-slate-900">Recent Campaigns</h3>
+            <h2 className="font-display text-sm font-semibold text-slate-900">Recent Campaigns</h2>
             <Link
               to="/campaigns"
               className="text-xs font-semibold text-blue-600 hover:text-blue-700 inline-flex items-center gap-1"
@@ -563,9 +558,9 @@ export const DashboardPage: React.FC = () => {
           )}
         </div>
 
-        <div className="bg-white border border-slate-200 rounded-xl overflow-hidden flex flex-col">
+        <div className="bg-white border border-slate-200 rounded-lg overflow-hidden flex flex-col">
           <div className="px-5 py-3.5 border-b border-slate-200">
-            <h3 className="font-display text-sm font-semibold text-slate-900">Recent Activity</h3>
+            <h2 className="font-display text-sm font-semibold text-slate-900">Recent Activity</h2>
           </div>
           <div className="divide-y divide-slate-100 flex-1">
             {data.recentActivity.length === 0 ? (

@@ -341,16 +341,14 @@ export const WhatsAppPage: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* Connection Status Header */}
-      <div className="bg-[#F8FAFC] border border-slate-200 rounded-xl px-5 py-3.5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
-            <MessageSquare className="w-4 h-4" />
-          </div>
+      {/* Connection Status Bar */}
+      <div className="pb-4 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div className="flex items-start gap-2.5">
+          <MessageSquare className="w-4 h-4 text-emerald-600 mt-0.5 shrink-0" />
           <div>
             <div className="flex items-center gap-2 flex-wrap">
               <h2 className="text-sm font-semibold text-[#1E293B]">
-                WhatsApp Business API
+                WhatsApp Business
               </h2>
               <span
                 className={`text-xs font-medium ${
@@ -371,7 +369,7 @@ export const WhatsAppPage: React.FC = () => {
         <button
           type="button"
           onClick={() => setConnectModalOpen(true)}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 whitespace-nowrap shrink-0"
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-700 bg-white border border-slate-200 rounded-md hover:bg-slate-50 whitespace-nowrap shrink-0 self-start sm:self-auto"
         >
           <Settings2 className="w-3.5 h-3.5" />
           <span>{isLive ? 'Configure' : 'Connect API'}</span>
@@ -379,9 +377,9 @@ export const WhatsAppPage: React.FC = () => {
       </div>
 
       <form onSubmit={handleOpenConfirm} className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Left: Composer Studio */}
+        {/* Left: Composer */}
         <div className="lg:col-span-7 space-y-5">
-          <div className="bg-white border border-slate-200 rounded-xl p-6 space-y-5">
+          <div className="bg-white border border-slate-200 rounded-lg p-5 sm:p-6 space-y-5">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-medium text-slate-700 mb-1.5">
@@ -729,12 +727,12 @@ export const WhatsAppPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Right: Authentic Mobile WhatsApp Device Preview & Test Send */}
+        {/* Right: Preview & Test Send */}
         <div className="lg:col-span-5 space-y-5">
-          <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-3">
+          <div className="bg-white border border-slate-200 rounded-lg p-5 space-y-3">
             <div className="flex items-center justify-between gap-2">
               <h3 className="font-display text-sm font-semibold text-slate-900">
-                WhatsApp Device Preview
+                Preview
               </h3>
               <div className="flex items-center gap-1.5">
                 {recipientSet.length > 1 && (
@@ -775,7 +773,7 @@ export const WhatsAppPage: React.FC = () => {
             </div>
 
             {/* Mobile Frame */}
-            <div className="mx-auto max-w-[330px] border-[6px] border-slate-900 rounded-[26px] overflow-hidden shadow-md bg-[#EFEAE2]">
+            <div className="mx-auto max-w-[330px] border-[5px] border-slate-900 rounded-[22px] overflow-hidden bg-[#EFEAE2]">
               <div className="bg-[#075E54] text-white px-4 py-3 flex items-center gap-2.5">
                 <div className="w-7 h-7 rounded-full bg-emerald-500/30 border border-white/30 flex items-center justify-center text-[11px] font-semibold">
                   CF
@@ -785,16 +783,16 @@ export const WhatsAppPage: React.FC = () => {
                     <p className="text-xs font-semibold truncate">ConnectFlow Business</p>
                     <ShieldCheck className="w-3.5 h-3.5 text-emerald-300 shrink-0" />
                   </div>
-                  <p className="text-[10px] text-emerald-100">Official Business Account</p>
+                  <p className="text-[10px] text-emerald-100">Business Account</p>
                 </div>
               </div>
 
               <div className="p-4 min-h-[240px] flex flex-col justify-between">
-                <div className="self-center px-2.5 py-0.5 rounded bg-white/80 text-[10px] font-medium text-slate-600 shadow-xs">
+                <div className="self-center px-2.5 py-0.5 rounded bg-white/85 text-[10px] font-medium text-slate-600">
                   TODAY
                 </div>
 
-                <div className="mt-6 bg-[#D9FDD3] rounded-xl rounded-tr-xs p-3 shadow-xs self-end max-w-[90%] border border-emerald-200/60">
+                <div className="mt-6 bg-[#D9FDD3] rounded-lg rounded-tr-xs p-3 self-end max-w-[90%] border border-emerald-200/60">
                   <div className="text-xs text-slate-900 leading-relaxed break-words">
                     {previewText
                       ? renderWhatsAppFormatted(previewText)
@@ -808,11 +806,11 @@ export const WhatsAppPage: React.FC = () => {
             </div>
           </div>
 
-          <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-3">
+          <div className="bg-white border border-slate-200 rounded-lg p-5 space-y-3">
             <div className="flex items-center gap-2">
               <TestTube className="w-4 h-4 text-emerald-600" />
               <h3 className="font-display text-sm font-semibold text-slate-900">
-                Send Test Message
+                Send Test
               </h3>
             </div>
             <div className="flex gap-2">

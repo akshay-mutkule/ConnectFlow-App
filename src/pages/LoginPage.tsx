@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { ShieldCheck } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { BrandLogo } from '../components/BrandLogo';
 
@@ -18,21 +17,21 @@ export const LoginPage: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] flex items-center justify-center p-6">
-      <div className="w-full max-w-md bg-white border border-slate-200 rounded-2xl p-8 sm:p-10 space-y-7 shadow-xs">
-        <div className="space-y-4">
+      <div className="w-full max-w-sm bg-white border border-slate-200 rounded-lg p-8 space-y-6">
+        <div className="space-y-3">
           <BrandLogo size="md" />
-          <div className="space-y-2 pt-2">
-            <h1 className="font-display text-2xl font-bold text-slate-900 tracking-tight">
-              WhatsApp and Email messaging, in one place.
+          <div className="pt-1">
+            <h1 className="font-display text-lg font-semibold text-slate-900">
+              Sign in to ConnectFlow
             </h1>
-            <p className="text-sm text-slate-500 leading-relaxed">
-              Manage opted-in contacts, send personalized campaigns, and track deliveries from a single workspace.
+            <p className="text-xs text-slate-500 mt-1">
+              WhatsApp Business and Email campaign management.
             </p>
           </div>
         </div>
 
         {authError && (
-          <div className="p-3.5 rounded-lg bg-red-50 border border-red-200 text-xs text-red-700">
+          <div className="p-3 rounded-md bg-red-50 border border-red-200 text-xs text-red-700">
             {authError}
           </div>
         )}
@@ -55,11 +54,6 @@ export const LoginPage: React.FC = () => {
             <span>{submitting ? 'Signing in...' : 'Sign in with Google'}</span>
           </div>
         </button>
-
-        <div className="pt-5 border-t border-slate-100 flex items-center gap-2 text-xs text-slate-500">
-          <ShieldCheck className="w-4 h-4 text-blue-600 shrink-0" />
-          <span>Credentials are stored server-side and never exposed in the browser.</span>
-        </div>
       </div>
     </div>
   );

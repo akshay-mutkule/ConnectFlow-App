@@ -394,16 +394,14 @@ export const EmailPage: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* Provider Header */}
-      <div className="bg-[#F8FAFC] border border-slate-200 rounded-xl px-5 py-3.5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
-            <Mail className="w-4 h-4" />
-          </div>
+      {/* Provider Status Bar */}
+      <div className="pb-4 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div className="flex items-start gap-2.5">
+          <Mail className="w-4 h-4 text-blue-600 mt-0.5 shrink-0" />
           <div>
             <div className="flex items-center gap-2 flex-wrap">
               <h2 className="text-sm font-semibold text-[#1E293B]">
-                Email Campaigns
+                Email Sender
               </h2>
               <span
                 className={`text-xs font-medium ${
@@ -432,7 +430,7 @@ export const EmailPage: React.FC = () => {
             setConnectPromptReason(undefined);
             setConnectModalOpen(true);
           }}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 whitespace-nowrap shrink-0"
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-700 bg-white border border-slate-200 rounded-md hover:bg-slate-50 whitespace-nowrap shrink-0 self-start sm:self-auto"
         >
           <Settings2 className="w-3.5 h-3.5" />
           <span>{integrations?.emailConnected ? 'Configure' : 'Connect Email'}</span>
@@ -442,7 +440,7 @@ export const EmailPage: React.FC = () => {
       <form onSubmit={handleSubmitForm} className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Left: Composer */}
         <div className="lg:col-span-7 space-y-5">
-          <div className="bg-white border border-slate-200 rounded-xl p-6 space-y-5">
+          <div className="bg-white border border-slate-200 rounded-lg p-5 sm:p-6 space-y-5">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-medium text-slate-700 mb-1.5">
@@ -832,12 +830,12 @@ export const EmailPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Right: Inbox Client Preview & Send Test Email */}
+        {/* Right: Preview & Send Test */}
         <div className="lg:col-span-5 space-y-5">
-          <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
+          <div className="bg-white border border-slate-200 rounded-lg overflow-hidden">
             <div className="px-5 py-3 border-b border-slate-200 bg-[#F8FAFC] flex items-center justify-between gap-2">
               <h3 className="font-display text-sm font-semibold text-slate-900">
-                Inbox Preview
+                Preview
               </h3>
               <div className="flex items-center gap-2">
                 {recipientSet.length > 1 && (
@@ -896,48 +894,46 @@ export const EmailPage: React.FC = () => {
               </div>
             </div>
 
-            <div className="p-4 bg-[#F8FAFC]">
-              <div
-                className={`mx-auto bg-white border border-slate-200 rounded-xl shadow-xs overflow-hidden transition-all ${
-                  previewViewport === 'mobile' ? 'max-w-[310px]' : 'w-full'
-                }`}
-              >
-                <div className="p-4 border-b border-slate-100 space-y-1.5 text-xs">
-                  <p className="text-slate-500">
-                    From:{' '}
-                    <span className="text-slate-800 font-medium">
-                      {fromEmail || 'Prompted on send'}
-                    </span>
-                  </p>
-                  <p className="text-slate-500">
-                    To:{' '}
-                    <span className="text-slate-800 font-mono">
-                      {sampleContact.email || 'alex@company.com'}
-                    </span>
-                  </p>
-                  <p className="text-slate-900 font-semibold text-sm pt-1">
-                    {previewSubject}
-                  </p>
-                </div>
-                <div className="p-4 space-y-3">
-                  <div
-                    className="text-xs text-slate-700 leading-relaxed space-y-2"
-                    dangerouslySetInnerHTML={{ __html: previewBody }}
-                  />
-                  <div className="pt-3 border-t border-slate-100 text-[11px] text-slate-400">
-                    You received this message because you opted in to communications.{' '}
-                    <span className="text-blue-600 underline">Unsubscribe</span>
-                  </div>
+            <div
+              className={`mx-auto bg-white transition-all ${
+                previewViewport === 'mobile' ? 'max-w-[320px] border-x border-slate-200' : 'w-full'
+              }`}
+            >
+              <div className="px-5 py-3.5 border-b border-slate-100 space-y-1 text-xs">
+                <p className="text-slate-500">
+                  From:{' '}
+                  <span className="text-slate-800 font-medium">
+                    {fromEmail || 'Prompted on send'}
+                  </span>
+                </p>
+                <p className="text-slate-500">
+                  To:{' '}
+                  <span className="text-slate-800 font-mono">
+                    {sampleContact.email || 'alex@company.com'}
+                  </span>
+                </p>
+                <p className="text-slate-900 font-semibold text-sm pt-1">
+                  {previewSubject}
+                </p>
+              </div>
+              <div className="p-5 space-y-3">
+                <div
+                  className="text-xs text-slate-700 leading-relaxed space-y-2"
+                  dangerouslySetInnerHTML={{ __html: previewBody }}
+                />
+                <div className="pt-3 border-t border-slate-100 text-[11px] text-slate-400">
+                  You received this message because you opted in to communications.{' '}
+                  <span className="text-blue-600 underline">Unsubscribe</span>
                 </div>
               </div>
             </div>
           </div>
 
-          <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-3">
+          <div className="bg-white border border-slate-200 rounded-lg p-5 space-y-3">
             <div className="flex items-center gap-2">
               <TestTube className="w-4 h-4 text-blue-600" />
               <h3 className="font-display text-sm font-semibold text-slate-900">
-                Send Test Email
+                Send Test
               </h3>
             </div>
             <div className="flex gap-2">
