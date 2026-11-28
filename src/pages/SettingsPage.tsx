@@ -30,7 +30,7 @@ export const SettingsPage: React.FC = () => {
   const [notifyDeliveryFailures, setNotifyDeliveryFailures] = useState(true);
   const [dailySendLimit, setDailySendLimit] = useState(500);
   const [saving, setSaving] = useState(false);
-  const [copiedWebhook, setCopiedWebhook] = useState(false);
+  const [copiedWebhook, setCopiedWebhook] = useState<'whatsapp' | 'email' | null>(null);
 
   const [waModalOpen, setWaModalOpen] = useState(false);
   const [emailModalOpen, setEmailModalOpen] = useState(false);
@@ -137,12 +137,12 @@ export const SettingsPage: React.FC = () => {
     }
   };
 
-  const copyWebhook = async () => {
+  const copyWebhook = async (channel: 'whatsapp' | 'email') => {
     try {
-      const url = `${window.location.origin}/api/webhooks/whatsapp`;
+      const url = `${window.location.origin}/api/webhooks/${channel}`;
       await navigator.clipboard.writeText(url);
-      setCopiedWebhook(true);
-      setTimeout(() => setCopiedWebhook(false), 1800);
+      setCopiedWebhook(channel);
+      setTimeout(() => setCopiedWebhook(null), 1800);
       showToast('Webhook URL copied', url, 'info');
     } catch {
       showToast('Copy failed', 'Unable to copy to clipboard', 'error');
@@ -339,11 +339,11 @@ export const SettingsPage: React.FC = () => {
               </code>
               <button
                 type="button"
-                onClick={copyWebhook}
+                onClick={() => copyWebhook('whatsapp')}
                 className="text-slate-400 hover:text-slate-700 shrink-0"
                 title="Copy full webhook URL"
               >
-                {copiedWebhook ? (
+                {copiedWebhook === 'whatsapp' ? (
                   <Check className="w-3.5 h-3.5 text-emerald-600" />
                 ) : (
                   <Copy className="w-3.5 h-3.5" />
@@ -417,8 +417,26 @@ export const SettingsPage: React.FC = () => {
             </div>
 
             <p className="text-xs text-slate-500 leading-relaxed">
-              Configure your sender email address via Gmail SMTP App Password, custom SMTP relay, or Resend API key.
+              Configure your sender email address via Gmail SMTP App Password, custom SMTP relay, or Resend API key. Delivery and bounce webhooks automatically suppress bounced addresses.
             </p>
+
+            <div className="flex items-center justify-between gap-2 px-3 py-2 bg-[#F8FAFC] border border-slate-200 rounded-lg">
+              <code className="text-[11px] font-mono text-slate-700 truncate">
+                /api/webhooks/email
+              </code>
+              <button
+                type="button"
+                onClick={() => copyWebhook('email')}
+                className="text-slate-400 hover:text-slate-700 shrink-0"
+                title="Copy email webhook URL"
+              >
+                {copiedWebhook === 'email' ? (
+                  <Check className="w-3.5 h-3.5 text-blue-600" />
+                ) : (
+                  <Copy className="w-3.5 h-3.5" />
+                )}
+              </button>
+            </div>
 
             {testResults.email && (
               <p

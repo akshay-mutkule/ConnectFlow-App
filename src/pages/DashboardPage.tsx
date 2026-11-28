@@ -445,7 +445,11 @@ export const DashboardPage: React.FC = () => {
               </span>
             </div>
             <p className="text-xs text-slate-500 font-mono tabular-nums">
-              {data.stats.whatsappOptedIn} opted-in contacts
+              {data.stats.whatsappOptedIn} opted-in (
+              {data.stats.totalContacts > 0
+                ? Math.round((data.stats.whatsappOptedIn / data.stats.totalContacts) * 100)
+                : 0}
+              %)
             </p>
             <Link
               to="/whatsapp"
@@ -467,7 +471,11 @@ export const DashboardPage: React.FC = () => {
               </span>
             </div>
             <p className="text-xs text-slate-500 font-mono tabular-nums">
-              {data.stats.emailOptedIn} opted-in contacts
+              {data.stats.emailOptedIn} opted-in (
+              {data.stats.totalContacts > 0
+                ? Math.round((data.stats.emailOptedIn / data.stats.totalContacts) * 100)
+                : 0}
+              %)
             </p>
             <Link
               to="/email"
@@ -477,6 +485,15 @@ export const DashboardPage: React.FC = () => {
               <ArrowRight className="w-3.5 h-3.5" />
             </Link>
           </div>
+
+          {data.channelBreakdown &&
+            (data.channelBreakdown.scheduledCount > 0 ||
+              data.channelBreakdown.suppressedCount > 0) && (
+              <div className="px-5 py-3 bg-[#F8FAFC] flex items-center justify-between text-[11px] font-mono text-slate-500 tabular-nums">
+                <span>{data.channelBreakdown.scheduledCount} scheduled</span>
+                <span>{data.channelBreakdown.suppressedCount} suppressed</span>
+              </div>
+            )}
         </div>
       </div>
 

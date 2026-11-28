@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   Copy,
   Eye,
@@ -15,6 +15,8 @@ import {
   Download,
   ChevronDown,
   ChevronRight,
+  Pencil,
+  CalendarClock,
 } from 'lucide-react';
 import { apiRequest } from '../lib/api';
 import { Campaign, CampaignRecipient } from '../types';
@@ -25,6 +27,7 @@ type FilterTab = 'all' | 'whatsapp' | 'email' | 'completed' | 'failed' | 'schedu
 
 export const CampaignsPage: React.FC = () => {
   const { showToast } = useToast();
+  const navigate = useNavigate();
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<FilterTab>('all');
@@ -38,6 +41,13 @@ export const CampaignsPage: React.FC = () => {
   const [recipientSearch, setRecipientSearch] = useState('');
   const [expandedRecipientId, setExpandedRecipientId] = useState<number | null>(null);
   const [retrying, setRetrying] = useState(false);
+
+  const [editingCampaign, setEditingCampaign] = useState<Campaign | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editSubject, setEditSubject] = useState('');
+  const [editBody, setEditBody] = useState('');
+  const [editScheduledAt, setEditScheduledAt] = useState('');
+  const [savingEdit, setSavingEdit] = useState(false);
 
   const loadCampaigns = async () => {
     setLoading(true);
@@ -111,6 +121,48 @@ export const CampaignsPage: React.FC = () => {
       showToast('Campaign duplicated', `${res.campaign.name} saved as scheduled draft.`, 'success');
     } catch (err: any) {
       showToast('Duplicate failed', err.message, 'error');
+    }
+  };
+
+  const openEditScheduleModal = (c: Campaign) => {
+    setEditingCampaign(c);
+    setEditName(c.name);
+    setEditSubject(c.subject || '');
+    setEditBody(c.body);
+    if (c.scheduledAt) {
+      const dt = new Date(c.scheduledAt);
+      const localIso = new Date(dt.getTime() - dt.getTimezoneOffset() * 60000)
+        .toISOString()
+        .slice(0, 16);
+      setEditScheduledAt(localIso);
+    } else {
+      setEditScheduledAt('');
+    }
+  };
+
+  const handleSaveScheduledEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingCampaign) return;
+    setSavingEdit(true);
+    try {
+      const res = await apiRequest<{ campaign: Campaign }>(`/api/campaigns/${editingCampaign.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          name: editName.trim(),
+          subject: editingCampaign.channel === 'email' ? editSubject.trim() : undefined,
+          body: editBody,
+          scheduledAt: editScheduledAt ? new Date(editScheduledAt).toISOString() : undefined,
+        }),
+      });
+      setCampaigns((prev) =>
+        prev.map((item) => (item.id === editingCampaign.id ? res.campaign : item))
+      );
+      setEditingCampaign(null);
+      showToast('Campaign updated', `${res.campaign.name} saved`, 'success');
+    } catch (err: any) {
+      showToast('Update failed', err.message, 'error');
+    } finally {
+      setSavingEdit(false);
     }
   };
 
@@ -415,12 +467,36 @@ export const CampaignsPage: React.FC = () => {
                           </button>
                           <button
                             type="button"
+                            onClick={() =>
+                              navigate(
+                                c.channel === 'whatsapp'
+                                  ? `/whatsapp?fromCampaign=${c.id}`
+                                  : `/email?fromCampaign=${c.id}`
+                              )
+                            }
+                            className="p-1.5 text-slate-400 hover:text-blue-600 rounded-md transition-colors"
+                            title="Edit & relaunch in composer"
+                          >
+                            <Pencil className="w-4 h-4" />
+                          </button>
+                          <button
+                            type="button"
                             onClick={() => handleDuplicate(c)}
                             className="p-1.5 text-slate-400 hover:text-slate-700 rounded-md transition-colors"
                             title="Duplicate campaign"
                           >
                             <Copy className="w-4 h-4" />
                           </button>
+                          {(c.status === 'scheduled' || c.status === 'paused') && (
+                            <button
+                              type="button"
+                              onClick={() => openEditScheduleModal(c)}
+                              className="p-1.5 text-slate-400 hover:text-blue-600 rounded-md transition-colors"
+                              title="Reschedule or edit queued content"
+                            >
+                              <CalendarClock className="w-4 h-4" />
+                            </button>
+                          )}
                           {c.status === 'scheduled' && (
                             <>
                               <button
@@ -771,6 +847,93 @@ export const CampaignsPage: React.FC = () => {
                 </table>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reschedule / Edit Scheduled Campaign Modal */}
+      {editingCampaign && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4">
+          <div className="bg-white border border-slate-200 rounded-xl w-full max-w-lg shadow-xl overflow-hidden">
+            <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
+              <h3 className="font-display text-base font-semibold text-slate-900">
+                Reschedule &amp; Edit Campaign
+              </h3>
+              <button
+                type="button"
+                onClick={() => setEditingCampaign(null)}
+                className="p-1 text-slate-400 hover:text-slate-700"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <form onSubmit={handleSaveScheduledEdit} className="p-6 space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-slate-700 mb-1">
+                  Campaign Name *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-700 mb-1">
+                  Scheduled Dispatch Time
+                </label>
+                <input
+                  type="datetime-local"
+                  value={editScheduledAt}
+                  onChange={(e) => setEditScheduledAt(e.target.value)}
+                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg font-mono"
+                />
+              </div>
+              {editingCampaign.channel === 'email' && (
+                <div>
+                  <label className="block text-xs font-medium text-slate-700 mb-1">
+                    Email Subject
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={editSubject}
+                    onChange={(e) => setEditSubject(e.target.value)}
+                    className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg"
+                  />
+                </div>
+              )}
+              <div>
+                <label className="block text-xs font-medium text-slate-700 mb-1">
+                  Message Content *
+                </label>
+                <textarea
+                  rows={5}
+                  required
+                  value={editBody}
+                  onChange={(e) => setEditBody(e.target.value)}
+                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg font-mono"
+                />
+              </div>
+              <div className="flex justify-end gap-2.5 pt-2 border-t border-slate-200">
+                <button
+                  type="button"
+                  onClick={() => setEditingCampaign(null)}
+                  className="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingEdit}
+                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-60"
+                >
+                  {savingEdit ? 'Saving...' : 'Save Changes'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

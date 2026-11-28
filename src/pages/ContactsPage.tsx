@@ -33,7 +33,7 @@ export const ContactsPage: React.FC = () => {
   const [search, setSearch] = useState('');
   const [selectedGroupId, setSelectedGroupId] = useState<number | 'all'>('all');
   const [selectedTag, setSelectedTag] = useState<string>('all');
-  const [consentFilter, setConsentFilter] = useState<'all' | 'whatsapp' | 'email'>('all');
+  const [consentFilter, setConsentFilter] = useState<'all' | 'whatsapp' | 'email' | 'suppressed'>('all');
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [inspectedContact, setInspectedContact] = useState<Contact | null>(null);
   const [contactHistory, setContactHistory] = useState<ContactHistoryItem[]>([]);
@@ -67,6 +67,7 @@ export const ContactsPage: React.FC = () => {
   >([]);
   const [importSource, setImportSource] = useState<'csv' | 'excel'>('csv');
   const [importGroupIds, setImportGroupIds] = useState<number[]>([]);
+  const [skipDuplicates, setSkipDuplicates] = useState(true);
   const [importing, setImporting] = useState(false);
 
   const loadData = async () => {
@@ -141,12 +142,45 @@ export const ContactsPage: React.FC = () => {
       if (consentFilter === 'whatsapp' && (!c.whatsappOptIn || Boolean(c.whatsappOptOutAt))) {
         return false;
       }
-      if (consentFilter === 'email' && (!c.emailOptIn || c.suppressedEmail)) {
+      if (consentFilter === 'email' && (!c.emailOptIn || c.suppressedEmail || Boolean(c.emailUnsubscribedAt))) {
+        return false;
+      }
+      if (
+        consentFilter === 'suppressed' &&
+        !c.suppressedEmail &&
+        !c.emailUnsubscribedAt &&
+        !c.whatsappOptOutAt
+      ) {
         return false;
       }
       return true;
     });
   }, [contacts, search, selectedGroupId, selectedTag, consentFilter]);
+
+  const importDuplicateCount = useMemo(() => {
+    if (!importRows.length) return 0;
+    const normPhone = (p: string) => p.replace(/[^\d+]/g, '');
+    const existingPhones = new Set(
+      contacts.map((c) => normPhone(c.phone || '')).filter(Boolean)
+    );
+    const existingEmails = new Set(
+      contacts.map((c) => (c.email || '').trim().toLowerCase()).filter(Boolean)
+    );
+    const seenPhones = new Set<string>();
+    const seenEmails = new Set<string>();
+    let dupes = 0;
+    for (const row of importRows) {
+      const p = normPhone(row.phone);
+      const em = row.email.trim().toLowerCase();
+      if ((p && (existingPhones.has(p) || seenPhones.has(p))) || (em && (existingEmails.has(em) || seenEmails.has(em)))) {
+        dupes++;
+      } else {
+        if (p) seenPhones.add(p);
+        if (em) seenEmails.add(em);
+      }
+    }
+    return dupes;
+  }, [importRows, contacts]);
 
   const openAddContact = () => {
     setEditingContact(null);
@@ -377,6 +411,7 @@ export const ContactsPage: React.FC = () => {
       const res = await apiRequest<{
         importedCount: number;
         skippedCount: number;
+        duplicateCount?: number;
         contacts: Contact[];
       }>('/api/contacts/import', {
         method: 'POST',
@@ -384,12 +419,17 @@ export const ContactsPage: React.FC = () => {
           contacts: importRows,
           source: importSource,
           groupIds: importGroupIds,
+          skipDuplicates,
         }),
       });
       setContacts((prev) => [...res.contacts, ...prev]);
+      const dupeNote =
+        res.duplicateCount && res.duplicateCount > 0
+          ? `${res.duplicateCount} duplicate(s) skipped. `
+          : '';
       showToast(
         `Imported ${res.importedCount} contacts`,
-        'Consent defaulted to opted-out until permission is verified.',
+        `${dupeNote}Consent defaulted to opted-out until permission is verified.`,
         'success'
       );
       setImportModalOpen(false);
@@ -613,7 +653,7 @@ export const ContactsPage: React.FC = () => {
               </select>
 
               <div className="flex items-center gap-0.5 p-0.5 bg-[#F8FAFC] border border-slate-200 rounded-md">
-                {(['all', 'whatsapp', 'email'] as const).map((f) => (
+                {(['all', 'whatsapp', 'email', 'suppressed'] as const).map((f) => (
                   <button
                     key={f}
                     type="button"
@@ -624,7 +664,13 @@ export const ContactsPage: React.FC = () => {
                         : 'text-slate-600 hover:text-slate-900'
                     }`}
                   >
-                    {f === 'all' ? 'All' : f === 'whatsapp' ? 'WA Opt-In' : 'Email Opt-In'}
+                    {f === 'all'
+                      ? 'All'
+                      : f === 'whatsapp'
+                        ? 'WA Opt-In'
+                        : f === 'email'
+                          ? 'Email Opt-In'
+                          : 'Suppressed'}
                   </button>
                 ))}
               </div>
@@ -726,6 +772,7 @@ export const ContactsPage: React.FC = () => {
                       | 'whatsapp_opt_out'
                       | 'email_opt_in'
                       | 'email_opt_out'
+                      | 'unsuppress_email'
                       | '';
                     if (val) void runBulkAction(val);
                   }}
@@ -737,6 +784,7 @@ export const ContactsPage: React.FC = () => {
                   <option value="whatsapp_opt_out">Disable WhatsApp Opt-In</option>
                   <option value="email_opt_in">Enable Email Opt-In</option>
                   <option value="email_opt_out">Disable Email Opt-In</option>
+                  <option value="unsuppress_email">Clear Email Suppression</option>
                 </select>
                 <button
                   type="button"
@@ -1381,30 +1429,48 @@ export const ContactsPage: React.FC = () => {
               </div>
 
               {importRows.length > 0 && (
-                <div className="border border-slate-200 rounded-lg max-h-48 overflow-y-auto">
-                  <table className="w-full text-left text-xs">
-                    <thead className="bg-slate-50 border-b border-slate-200 text-slate-500">
-                      <tr>
-                        <th className="py-2 px-3">Name</th>
-                        <th className="py-2 px-3">Phone</th>
-                        <th className="py-2 px-3">Email</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {importRows.slice(0, 8).map((r, idx) => (
-                        <tr key={idx}>
-                          <td className="py-2 px-3 font-medium text-slate-800">{r.name}</td>
-                          <td className="py-2 px-3 font-mono text-slate-600">{r.phone || '—'}</td>
-                          <td className="py-2 px-3 text-slate-600">{r.email || '—'}</td>
+                <div className="space-y-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                    <label className="inline-flex items-center gap-2 text-slate-700 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={skipDuplicates}
+                        onChange={(e) => setSkipDuplicates(e.target.checked)}
+                        className="rounded border-slate-300 text-blue-600"
+                      />
+                      <span>Skip existing duplicates (recommended)</span>
+                    </label>
+                    {importDuplicateCount > 0 && (
+                      <span className="font-mono text-amber-700 tabular-nums">
+                        {importDuplicateCount} duplicate(s) detected
+                      </span>
+                    )}
+                  </div>
+                  <div className="border border-slate-200 rounded-lg max-h-48 overflow-y-auto">
+                    <table className="w-full text-left text-xs">
+                      <thead className="bg-slate-50 border-b border-slate-200 text-slate-500">
+                        <tr>
+                          <th className="py-2 px-3">Name</th>
+                          <th className="py-2 px-3">Phone</th>
+                          <th className="py-2 px-3">Email</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                  {importRows.length > 8 && (
-                    <p className="text-[11px] text-slate-500 px-3 py-2 border-t border-slate-100">
-                      +{importRows.length - 8} more valid rows ready to import
-                    </p>
-                  )}
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {importRows.slice(0, 8).map((r, idx) => (
+                          <tr key={idx}>
+                            <td className="py-2 px-3 font-medium text-slate-800">{r.name}</td>
+                            <td className="py-2 px-3 font-mono text-slate-600">{r.phone || '—'}</td>
+                            <td className="py-2 px-3 text-slate-600">{r.email || '—'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    {importRows.length > 8 && (
+                      <p className="text-[11px] text-slate-500 px-3 py-2 border-t border-slate-100">
+                        +{importRows.length - 8} more valid rows ready to import
+                      </p>
+                    )}
+                  </div>
                 </div>
               )}
 
@@ -1422,7 +1488,13 @@ export const ContactsPage: React.FC = () => {
                   onClick={handleImportConfirm}
                   className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-60"
                 >
-                  {importing ? 'Importing...' : `Import ${importRows.length} Contacts`}
+                  {importing
+                    ? 'Importing...'
+                    : `Import ${
+                        skipDuplicates
+                          ? Math.max(0, importRows.length - importDuplicateCount)
+                          : importRows.length
+                      } Contacts`}
                 </button>
               </div>
             </div>

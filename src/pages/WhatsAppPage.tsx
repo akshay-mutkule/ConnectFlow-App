@@ -19,10 +19,11 @@ import {
   Code,
 } from 'lucide-react';
 import { apiRequest } from '../lib/api';
-import { Campaign, Contact, ContactGroup, Template } from '../types';
+import { Campaign, CampaignRecipient, Contact, ContactGroup, Template } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../components/ToastContext';
 import { ConnectWhatsAppModal } from '../components/ConnectWhatsAppModal';
+import { countMissingVariableContacts, personalizeText } from '../lib/personalize';
 
 function renderWhatsAppLine(line: string, lineKey: number): React.ReactNode[] {
   const tokenRegex = /(\*[^*\n]+\*|_[^_\n]+_|~[^~\n]+~|`[^`\n]+`)/g;
@@ -90,6 +91,7 @@ export const WhatsAppPage: React.FC = () => {
   const [selectedContactIds, setSelectedContactIds] = useState<number[]>([]);
   const [selectedGroupIds, setSelectedGroupIds] = useState<number[]>([]);
   const [recipientSearch, setRecipientSearch] = useState('');
+  const [recipientTagFilter, setRecipientTagFilter] = useState('all');
   const [scheduleEnabled, setScheduleEnabled] = useState(false);
   const [scheduledAt, setScheduledAt] = useState('');
 
@@ -127,6 +129,38 @@ export const WhatsAppPage: React.FC = () => {
           const numId = Number(cid);
           if (numId) setSelectedContactIds([numId]);
         }
+
+        const fromCampaignId = searchParams.get('fromCampaign');
+        if (fromCampaignId) {
+          try {
+            const campRes = await apiRequest<{
+              campaign: Campaign;
+              recipients: CampaignRecipient[];
+            }>(`/api/campaigns/${fromCampaignId}`);
+            if (campRes.campaign.channel === 'whatsapp') {
+              setCampaignName(`${campRes.campaign.name} (Relaunch)`);
+              setBody(campRes.campaign.body);
+              if (campRes.campaign.templateId) {
+                setSelectedTemplateId(String(campRes.campaign.templateId));
+              }
+              const eligibleIdSet = new Set(
+                cRes.contacts
+                  .filter((c) => c.whatsappOptIn && !c.whatsappOptOutAt && Boolean(c.phone))
+                  .map((c) => c.id)
+              );
+              const preselected = Array.from(
+                new Set(
+                  campRes.recipients
+                    .map((r) => r.contactId)
+                    .filter((id): id is number => Boolean(id) && eligibleIdSet.has(id!))
+                )
+              );
+              if (preselected.length > 0) setSelectedContactIds(preselected);
+            }
+          } catch {
+            // Ignore invalid source campaign id
+          }
+        }
       } catch (err: any) {
         showToast('Failed to load WhatsApp workspace', err.message, 'error');
       }
@@ -146,11 +180,16 @@ export const WhatsAppPage: React.FC = () => {
 
   const visibleEligibleContacts = useMemo(() => {
     const q = recipientSearch.trim().toLowerCase();
-    if (!q) return eligibleContacts;
-    return eligibleContacts.filter(
-      (c) => c.name.toLowerCase().includes(q) || (c.phone || '').toLowerCase().includes(q)
-    );
-  }, [eligibleContacts, recipientSearch]);
+    return eligibleContacts.filter((c) => {
+      if (recipientTagFilter !== 'all' && !c.tags.includes(recipientTagFilter)) {
+        return false;
+      }
+      if (q) {
+        return c.name.toLowerCase().includes(q) || (c.phone || '').toLowerCase().includes(q);
+      }
+      return true;
+    });
+  }, [eligibleContacts, recipientSearch, recipientTagFilter]);
 
   const recipientSet = useMemo(() => {
     const ids = new Set<number>(selectedContactIds);
@@ -170,11 +209,10 @@ export const WhatsAppPage: React.FC = () => {
   const sampleContact = recipientSet[activePreviewIdx] ||
     eligibleContacts[0] || { name: 'Alex Rivera', phone: '+15550192834' };
 
-  const previewText = useMemo(() => {
-    return body
-      .replace(/\{\{\s*name\s*\}\}/gi, sampleContact.name)
-      .replace(/\{\{\s*phone\s*\}\}/gi, sampleContact.phone || '+15550192834');
-  }, [body, sampleContact]);
+  const previewText = useMemo(
+    () => personalizeText(body, sampleContact, { phone: '+15550192834' }),
+    [body, sampleContact]
+  );
 
   const selectedTemplate = useMemo(
     () => templates.find((t) => String(t.id) === selectedTemplateId),
@@ -224,11 +262,10 @@ export const WhatsAppPage: React.FC = () => {
 
   const dailyLimit = profile?.dailySendLimit || 500;
   const overQuota = recipientSet.length > dailyLimit;
-  const usesNameVar = /\{\{\s*name\s*\}\}/i.test(body);
-  const usesPhoneVar = /\{\{\s*phone\s*\}\}/i.test(body);
-  const missingVarContacts = recipientSet.filter(
-    (c) => (usesNameVar && !c.name.trim()) || (usesPhoneVar && !c.phone)
-  ).length;
+  const missingVarContacts = useMemo(
+    () => countMissingVariableContacts(body, recipientSet),
+    [body, recipientSet]
+  );
 
   const handleSaveAsDraft = async () => {
     if (!body.trim()) return;
@@ -466,7 +503,15 @@ export const WhatsAppPage: React.FC = () => {
                     <Code className="w-3.5 h-3.5" />
                   </button>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setBody((p) => `${p}{{first_name | there}}`)}
+                    title="Inserts first name with 'there' fallback if missing"
+                    className="px-2 py-0.5 text-[11px] font-mono text-emerald-700 bg-emerald-50 border border-emerald-200 rounded hover:bg-emerald-100"
+                  >
+                    + {'{{first_name}}'}
+                  </button>
                   <button
                     type="button"
                     onClick={() => setBody((p) => `${p}{{name}}`)}
@@ -609,8 +654,8 @@ export const WhatsAppPage: React.FC = () => {
               )}
 
               <div>
-                <div className="flex items-center justify-between gap-3 mb-2">
-                  <div className="relative flex-1">
+                <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                  <div className="relative flex-1 min-w-[160px]">
                     <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                     <input
                       type="text"
@@ -620,6 +665,21 @@ export const WhatsAppPage: React.FC = () => {
                       className="w-full pl-8 pr-3 py-1.5 text-xs border border-slate-200 rounded-lg"
                     />
                   </div>
+                  {allEligibleTags.length > 0 && (
+                    <select
+                      value={recipientTagFilter}
+                      onChange={(e) => setRecipientTagFilter(e.target.value)}
+                      aria-label="Filter contacts by tag"
+                      className="px-2.5 py-1.5 text-xs border border-slate-200 rounded-lg bg-white text-slate-700"
+                    >
+                      <option value="all">All tags</option>
+                      {allEligibleTags.map((tag) => (
+                        <option key={tag} value={tag}>
+                          #{tag}
+                        </option>
+                      ))}
+                    </select>
+                  )}
                   <button
                     type="button"
                     onClick={() =>

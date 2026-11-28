@@ -237,6 +237,85 @@ app.post('/api/webhooks/whatsapp', async (req, res) => {
   }
 });
 
+// Public Email Delivery & Bounce Webhook (Resend / SMTP Relay Events)
+app.post('/api/webhooks/email', async (req, res) => {
+  try {
+    const events = Array.isArray(req.body) ? req.body : [req.body];
+    for (const evt of events) {
+      const rawType = String(evt?.type || evt?.event || evt?.status || '').toLowerCase();
+      const data = evt?.data || evt;
+      const msgId = String(data?.email_id || data?.messageId || data?.id || '').trim();
+      if (!msgId) continue;
+
+      let nextStatus: 'delivered' | 'bounced' | 'failed' | null = null;
+      if (rawType.includes('delivered')) nextStatus = 'delivered';
+      else if (rawType.includes('bounced') || rawType.includes('complained') || rawType.includes('complaint')) {
+        nextStatus = 'bounced';
+      } else if (rawType.includes('failed')) {
+        nextStatus = 'failed';
+      }
+      if (!nextStatus) continue;
+
+      const [rec] = await db
+        .select()
+        .from(campaignRecipients)
+        .where(eq(campaignRecipients.providerMessageId, msgId))
+        .limit(1);
+
+      if (!rec) continue;
+
+      const errorReason =
+        data?.bounce?.message ||
+        data?.error ||
+        (nextStatus === 'bounced' ? `Email ${rawType || 'bounced'}` : null);
+
+      await db
+        .update(campaignRecipients)
+        .set({
+          status: nextStatus,
+          errorMessage: errorReason || rec.errorMessage,
+          updatedAt: new Date(),
+        })
+        .where(eq(campaignRecipients.id, rec.id));
+
+      if (nextStatus === 'bounced' && rec.contactId) {
+        const [camp] = await db
+          .select({ userId: campaigns.userId })
+          .from(campaigns)
+          .where(eq(campaigns.id, rec.campaignId))
+          .limit(1);
+        if (camp) {
+          await markContactUnsubscribed(rec.contactId, camp.userId, 'email');
+          await db.insert(auditLogs).values({
+            userId: camp.userId,
+            action: 'email_bounced_suppressed',
+            channel: 'email',
+            details: `Auto-suppressed ${rec.destination} after bounce/complaint webhook (${rawType}).`,
+          });
+        }
+      }
+
+      const allRecs = await db
+        .select()
+        .from(campaignRecipients)
+        .where(eq(campaignRecipients.campaignId, rec.campaignId));
+
+      const deliveredCount = allRecs.filter((r) => ['delivered', 'read'].includes(r.status)).length;
+      const bouncedCount = allRecs.filter((r) => r.status === 'bounced').length;
+      const failedCount = allRecs.filter((r) => r.status === 'failed').length;
+
+      await db
+        .update(campaigns)
+        .set({ deliveredCount, bouncedCount, failedCount })
+        .where(eq(campaigns.id, rec.campaignId));
+    }
+    res.sendStatus(200);
+  } catch (err) {
+    console.error('Email webhook error:', err);
+    res.sendStatus(500);
+  }
+});
+
 // Authenticated User Profile & Preferences
 app.get('/api/me', requireAuth, async (req: AuthRequest, res) => {
   try {
@@ -928,6 +1007,7 @@ app.post('/api/contacts/import', requireAuth, async (req: AuthRequest, res) => {
     const dbUser = await resolveDbUser(req);
     const rows: any[] = Array.isArray(req.body.contacts) ? req.body.contacts : [];
     const source = req.body.source === 'excel' ? 'excel' : 'csv';
+    const skipDuplicates = req.body.skipDuplicates !== false;
     const defaultGroupIds = Array.isArray(req.body.groupIds)
       ? req.body.groupIds.map((id: unknown) => Number(id)).filter(Boolean)
       : [];
@@ -936,9 +1016,22 @@ app.post('/api/contacts/import', requireAuth, async (req: AuthRequest, res) => {
       return res.status(400).json({ error: 'No contacts found in file' });
     }
 
+    const existingContacts = await db
+      .select({ phone: contacts.phone, email: contacts.email })
+      .from(contacts)
+      .where(eq(contacts.userId, dbUser.id));
+
+    const existingPhones = new Set(
+      existingContacts.map((c) => (c.phone ? normalizePhoneE164(c.phone) : '')).filter(Boolean)
+    );
+    const existingEmails = new Set(
+      existingContacts.map((c) => (c.email ? c.email.trim().toLowerCase() : '')).filter(Boolean)
+    );
+
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     const validRecords: (typeof contacts.$inferInsert)[] = [];
     let skipped = 0;
+    let duplicateCount = 0;
 
     for (const r of rows) {
       const name = String(r.name || '').trim();
@@ -951,6 +1044,17 @@ app.post('/api/contacts/import', requireAuth, async (req: AuthRequest, res) => {
       if (email && !emailRegex.test(email)) {
         skipped++;
         continue;
+      }
+
+      if (skipDuplicates) {
+        const isDupPhone = Boolean(phone && existingPhones.has(phone));
+        const isDupEmail = Boolean(email && existingEmails.has(email));
+        if (isDupPhone || isDupEmail) {
+          duplicateCount++;
+          continue;
+        }
+        if (phone) existingPhones.add(phone);
+        if (email) existingEmails.add(email);
       }
 
       const tags = Array.isArray(r.tags)
@@ -976,7 +1080,10 @@ app.post('/api/contacts/import', requireAuth, async (req: AuthRequest, res) => {
 
     if (!validRecords.length) {
       return res.status(400).json({
-        error: 'No valid contact rows could be imported. Ensure each row has a name and valid phone or email.',
+        error:
+          duplicateCount > 0
+            ? `All ${duplicateCount} matching contacts already exist in your workspace.`
+            : 'No valid contact rows could be imported. Ensure each row has a name and valid phone or email.',
       });
     }
 
@@ -985,12 +1092,13 @@ app.post('/api/contacts/import', requireAuth, async (req: AuthRequest, res) => {
     await db.insert(auditLogs).values({
       userId: dbUser.id,
       action: 'contacts_imported',
-      details: `Imported ${inserted.length} contacts via ${source.toUpperCase()} (${skipped} invalid rows skipped). Consent defaulted to opted-out.`,
+      details: `Imported ${inserted.length} contacts via ${source.toUpperCase()} (${duplicateCount} duplicate(s), ${skipped} invalid skipped). Consent defaulted to opted-out.`,
     });
 
     res.status(201).json({
       importedCount: inserted.length,
       skippedCount: skipped,
+      duplicateCount,
       contacts: inserted,
     });
   } catch (error: any) {
@@ -1604,6 +1712,86 @@ app.post('/api/campaigns/:id/status', requireAuth, async (req: AuthRequest, res)
     res.json({ campaign: updated[0] });
   } catch (error: any) {
     res.status(500).json({ error: error.message || 'Failed to update campaign status' });
+  }
+});
+
+// Edit or reschedule a scheduled/paused campaign before dispatch
+app.patch('/api/campaigns/:id', requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const dbUser = await resolveDbUser(req);
+    const id = parsePositiveId(req.params.id);
+    if (!id) return res.status(400).json({ error: 'Invalid campaign ID' });
+
+    const [existing] = await db
+      .select()
+      .from(campaigns)
+      .where(and(eq(campaigns.id, id), eq(campaigns.userId, dbUser.id)))
+      .limit(1);
+
+    if (!existing) {
+      return res.status(404).json({ error: 'Campaign not found' });
+    }
+    if (existing.status !== 'scheduled' && existing.status !== 'paused') {
+      return res.status(400).json({
+        error: 'Only scheduled or paused campaigns can be edited or rescheduled.',
+      });
+    }
+
+    const nextName = req.body.name !== undefined ? String(req.body.name).trim() : existing.name;
+    const nextSubject =
+      existing.channel === 'email' && req.body.subject !== undefined
+        ? String(req.body.subject).trim()
+        : existing.subject;
+    const nextBody = req.body.body !== undefined ? String(req.body.body) : existing.body;
+    const nextScheduledAt =
+      req.body.scheduledAt !== undefined ? new Date(req.body.scheduledAt) : existing.scheduledAt;
+
+    if (!nextName || !nextBody.trim()) {
+      return res.status(400).json({ error: 'Campaign name and body are required.' });
+    }
+    if (!nextScheduledAt || Number.isNaN(nextScheduledAt.getTime())) {
+      return res.status(400).json({ error: 'Provide a valid scheduled date and time.' });
+    }
+
+    const [updated] = await db
+      .update(campaigns)
+      .set({
+        name: nextName,
+        subject: nextSubject,
+        body: nextBody,
+        scheduledAt: nextScheduledAt,
+      })
+      .where(and(eq(campaigns.id, id), eq(campaigns.userId, dbUser.id)))
+      .returning();
+
+    if (req.body.body !== undefined) {
+      const queuedRecipients = await db
+        .select()
+        .from(campaignRecipients)
+        .where(and(eq(campaignRecipients.campaignId, id), eq(campaignRecipients.status, 'queued')));
+      for (const rec of queuedRecipients) {
+        const rendered = personalizeMessage(nextBody, {
+          name: rec.contactName,
+          phone: existing.channel === 'whatsapp' ? rec.destination : undefined,
+          email: existing.channel === 'email' ? rec.destination : undefined,
+        });
+        await db
+          .update(campaignRecipients)
+          .set({ renderedBody: rendered, updatedAt: new Date() })
+          .where(eq(campaignRecipients.id, rec.id));
+      }
+    }
+
+    await db.insert(auditLogs).values({
+      userId: dbUser.id,
+      action: 'campaign_rescheduled',
+      channel: existing.channel,
+      details: `Updated schedule for "${nextName}" to ${nextScheduledAt.toLocaleString()}.`,
+    });
+
+    res.json({ campaign: updated });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Failed to update scheduled campaign' });
   }
 });
 

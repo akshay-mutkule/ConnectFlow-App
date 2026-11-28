@@ -10,15 +10,13 @@ import {
   templates,
 } from '../db/schema.ts';
 import { sanitizeEmailHtml } from '../lib/sanitize.ts';
+import { personalizeText } from '../lib/personalize.ts';
 
 export function personalizeMessage(
   template: string,
   contact: { name: string; phone?: string | null; email?: string | null }
 ): string {
-  return template
-    .replace(/\{\{\s*name\s*\}\}/gi, contact.name || 'Friend')
-    .replace(/\{\{\s*phone\s*\}\}/gi, contact.phone || '')
-    .replace(/\{\{\s*email\s*\}\}/gi, contact.email || '');
+  return personalizeText(template, contact);
 }
 
 export function normalizePhoneE164(phone: string): string {
@@ -313,8 +311,11 @@ export async function executeCampaignById(campaignId: number, appBaseUrl: string
       if (campaign.channel === 'whatsapp') {
         const templateParams: string[] = [];
         if (waMetaTemplate) {
-          if (/\{\{\s*name\s*\}\}/i.test(campaign.body)) templateParams.push(rec.contactName);
-          if (/\{\{\s*phone\s*\}\}/i.test(campaign.body)) templateParams.push(rec.destination);
+          if (/\{\{\s*first_name(?:\s*\|[^}]*)?\}\}/i.test(campaign.body)) {
+            templateParams.push((rec.contactName || '').trim().split(/\s+/)[0] || 'there');
+          }
+          if (/\{\{\s*name(?:\s*\|[^}]*)?\}\}/i.test(campaign.body)) templateParams.push(rec.contactName);
+          if (/\{\{\s*phone(?:\s*\|[^}]*)?\}\}/i.test(campaign.body)) templateParams.push(rec.destination);
         }
 
         const result = await sendWhatsAppMessage({

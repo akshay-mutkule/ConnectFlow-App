@@ -21,11 +21,12 @@ import {
   MousePointerClick,
 } from 'lucide-react';
 import { apiRequest } from '../lib/api';
-import { Campaign, Contact, ContactGroup, Template } from '../types';
+import { Campaign, CampaignRecipient, Contact, ContactGroup, Template } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../components/ToastContext';
 import { ConnectEmailModal } from '../components/ConnectEmailModal';
 import { sanitizeEmailHtml } from '../lib/sanitize';
+import { countMissingVariableContacts, personalizeText } from '../lib/personalize';
 
 export const EmailPage: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -54,6 +55,7 @@ export const EmailPage: React.FC = () => {
   const [selectedContactIds, setSelectedContactIds] = useState<number[]>([]);
   const [selectedGroupIds, setSelectedGroupIds] = useState<number[]>([]);
   const [recipientSearch, setRecipientSearch] = useState('');
+  const [recipientTagFilter, setRecipientTagFilter] = useState('all');
   const [scheduleEnabled, setScheduleEnabled] = useState(false);
   const [scheduledAt, setScheduledAt] = useState('');
 
@@ -101,6 +103,48 @@ export const EmailPage: React.FC = () => {
           const numId = Number(cid);
           if (numId) setSelectedContactIds([numId]);
         }
+
+        const fromCampaignId = searchParams.get('fromCampaign');
+        if (fromCampaignId) {
+          try {
+            const campRes = await apiRequest<{
+              campaign: Campaign;
+              recipients: CampaignRecipient[];
+            }>(`/api/campaigns/${fromCampaignId}`);
+            if (campRes.campaign.channel === 'email') {
+              setCampaignName(`${campRes.campaign.name} (Relaunch)`);
+              if (campRes.campaign.subject) setSubject(campRes.campaign.subject);
+              if (campRes.campaign.fromEmail) setFromEmail(campRes.campaign.fromEmail);
+              const safeBody = sanitizeEmailHtml(campRes.campaign.body);
+              setBody(safeBody);
+              if (visualRef.current) visualRef.current.innerHTML = safeBody;
+              if (campRes.campaign.templateId) {
+                setSelectedTemplateId(String(campRes.campaign.templateId));
+              }
+              const eligibleIdSet = new Set(
+                cRes.contacts
+                  .filter(
+                    (c) =>
+                      c.emailOptIn &&
+                      !c.suppressedEmail &&
+                      !c.emailUnsubscribedAt &&
+                      Boolean(c.email)
+                  )
+                  .map((c) => c.id)
+              );
+              const preselected = Array.from(
+                new Set(
+                  campRes.recipients
+                    .map((r) => r.contactId)
+                    .filter((id): id is number => Boolean(id) && eligibleIdSet.has(id!))
+                )
+              );
+              if (preselected.length > 0) setSelectedContactIds(preselected);
+            }
+          } catch {
+            // Ignore invalid source campaign id
+          }
+        }
       } catch (err: any) {
         showToast('Failed to load email workspace', err.message, 'error');
       }
@@ -136,11 +180,16 @@ export const EmailPage: React.FC = () => {
 
   const visibleEligibleContacts = useMemo(() => {
     const q = recipientSearch.trim().toLowerCase();
-    if (!q) return eligibleContacts;
-    return eligibleContacts.filter(
-      (c) => c.name.toLowerCase().includes(q) || (c.email || '').toLowerCase().includes(q)
-    );
-  }, [eligibleContacts, recipientSearch]);
+    return eligibleContacts.filter((c) => {
+      if (recipientTagFilter !== 'all' && !c.tags.includes(recipientTagFilter)) {
+        return false;
+      }
+      if (q) {
+        return c.name.toLowerCase().includes(q) || (c.email || '').toLowerCase().includes(q);
+      }
+      return true;
+    });
+  }, [eligibleContacts, recipientSearch, recipientTagFilter]);
 
   const recipientSet = useMemo(() => {
     const ids = new Set<number>(selectedContactIds);
@@ -161,19 +210,14 @@ export const EmailPage: React.FC = () => {
     eligibleContacts[0] || { name: 'Alex Rivera', email: 'alex@company.com' };
 
   const previewSubject = useMemo(
-    () =>
-      subject
-        .replace(/\{\{\s*name\s*\}\}/gi, sampleContact.name)
-        .replace(/\{\{\s*email\s*\}\}/gi, sampleContact.email || 'alex@company.com'),
+    () => personalizeText(subject, sampleContact, { email: 'alex@company.com' }),
     [subject, sampleContact]
   );
 
   const previewBody = useMemo(
     () =>
       sanitizeEmailHtml(
-        body
-          .replace(/\{\{\s*name\s*\}\}/gi, sampleContact.name)
-          .replace(/\{\{\s*email\s*\}\}/gi, sampleContact.email || 'alex@company.com')
+        personalizeText(body, sampleContact, { email: 'alex@company.com' })
       ),
     [body, sampleContact]
   );
@@ -243,11 +287,10 @@ export const EmailPage: React.FC = () => {
 
   const dailyLimit = profile?.dailySendLimit || 500;
   const overQuota = recipientSet.length > dailyLimit;
-  const usesNameVar = /\{\{\s*name\s*\}\}/i.test(`${subject} ${body}`);
-  const usesEmailVar = /\{\{\s*email\s*\}\}/i.test(`${subject} ${body}`);
-  const missingVarContacts = recipientSet.filter(
-    (c) => (usesNameVar && !c.name.trim()) || (usesEmailVar && !c.email)
-  ).length;
+  const missingVarContacts = useMemo(
+    () => countMissingVariableContacts(`${subject} ${body}`, recipientSet),
+    [subject, body, recipientSet]
+  );
 
   const handleSelectTemplate = (id: string) => {
     setSelectedTemplateId(id);
@@ -591,6 +634,14 @@ export const EmailPage: React.FC = () => {
                   </button>
                   <button
                     type="button"
+                    onClick={() => insertToken(' {{first_name | there}}')}
+                    title="Inserts first name with 'there' fallback if missing"
+                    className="px-2 py-1 text-[11px] font-mono text-blue-700 bg-blue-50 border border-blue-200 rounded hover:bg-blue-100"
+                  >
+                    + {'{{first_name}}'}
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => insertToken(' {{name}}')}
                     className="px-2 py-1 text-[11px] font-mono text-blue-700 bg-blue-50 border border-blue-200 rounded hover:bg-blue-100"
                   >
@@ -713,8 +764,8 @@ export const EmailPage: React.FC = () => {
                 </div>
               )}
 
-              <div className="flex items-center justify-between gap-3">
-                <div className="relative flex-1">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="relative flex-1 min-w-[160px]">
                   <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                   <input
                     type="text"
@@ -724,6 +775,21 @@ export const EmailPage: React.FC = () => {
                     className="w-full pl-8 pr-3 py-1.5 text-xs border border-slate-200 rounded-lg"
                   />
                 </div>
+                {allEligibleTags.length > 0 && (
+                  <select
+                    value={recipientTagFilter}
+                    onChange={(e) => setRecipientTagFilter(e.target.value)}
+                    aria-label="Filter contacts by tag"
+                    className="px-2.5 py-1.5 text-xs border border-slate-200 rounded-lg bg-white text-slate-700"
+                  >
+                    <option value="all">All tags</option>
+                    {allEligibleTags.map((tag) => (
+                      <option key={tag} value={tag}>
+                        #{tag}
+                      </option>
+                    ))}
+                  </select>
+                )}
                 <button
                   type="button"
                   onClick={() =>
